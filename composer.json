@@ -7,7 +7,7 @@
     "license": "proprietary",
     "require": {
         "php": "^8.3",
-        "filament/filament": "*",
+        "filament/filament": "^5.7",
         "laravel/framework": "^12.0",
         "laravel/horizon": "^5.48",
         "laravel/tinker": "^2.10.1",
@@ -17,11 +17,14 @@
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
+        "larastan/larastan": "^3.10",
         "laravel/pail": "^1.2.2",
         "laravel/pint": "^1.24",
         "laravel/sail": "^1.41",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.6",
+        "pestphp/pest": "^3.8",
+        "pestphp/pest-plugin-laravel": "^3.2",
         "phpunit/phpunit": "^11.5.50"
     },
     "autoload": {
@@ -77,6 +80,12 @@
             "dont-discover": []
         }
     },
+    "repositories": [
+        {
+            "type": "git",
+            "url": "https://github.com/phpstan/phpstan.git"
+        }
+    ],
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
