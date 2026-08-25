@@ -13,8 +13,12 @@
 /.zed
 /auth.json
 /node_modules
+/build
 /public/build
+/public/css
+/public/fonts
 /public/hot
+/public/js
 /public/storage
 /storage/*.key
 /storage/pail

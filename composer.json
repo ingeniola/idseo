@@ -3,7 +3,11 @@
     "name": "ingenio/idseo",
     "type": "project",
     "description": "Plataforma SEO interna de Ingenio, sobre DataForSEO.",
-    "keywords": ["laravel", "seo", "dataforseo"],
+    "keywords": [
+        "laravel",
+        "seo",
+        "dataforseo"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.3",
@@ -58,7 +62,8 @@
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
@@ -87,16 +92,23 @@
                 "name": "phpstan/phpstan",
                 "version": "2.2.9",
                 "type": "library",
-                "license": ["MIT"],
+                "license": [
+                    "MIT"
+                ],
                 "require": {
                     "php": "^7.4|^8.0"
                 },
                 "conflict": {
                     "phpstan/phpstan-shim": "*"
                 },
-                "bin": ["phpstan", "phpstan.phar"],
+                "bin": [
+                    "phpstan",
+                    "phpstan.phar"
+                ],
                 "autoload": {
-                    "files": ["bootstrap.php"]
+                    "files": [
+                        "bootstrap.php"
+                    ]
                 },
                 "source": {
                     "type": "git",
