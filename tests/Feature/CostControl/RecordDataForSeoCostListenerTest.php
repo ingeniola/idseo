@@ -36,7 +36,7 @@ test('no registra nada cuando no hay api_status_code (fallo de transporte puro)'
     $event = new DataForSeoRequestCompleted(
         method: 'POST',
         endpoint: 'serp/google/organic/task_post',
-        httpStatus: 0,
+        httpStatus: null,
         durationMs: 30000,
         apiStatusCode: null,
         cost: null,

@@ -1,0 +1,78 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use App\Enums\SearchEngine;
+use App\Enums\TargetType;
+use App\Enums\TrackingFrequency;
+use Database\Factories\ProjectFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+/**
+ * @property int $id
+ * @property int $client_id
+ * @property string $name
+ * @property string $domain
+ * @property TargetType $target_type
+ * @property int $default_location_code
+ * @property string $default_language_code
+ * @property SearchEngine $search_engine
+ * @property TrackingFrequency $tracking_frequency
+ * @property bool $is_active
+ */
+class Project extends Model
+{
+    /** @use HasFactory<ProjectFactory> */
+    use HasFactory;
+
+    protected $fillable = [
+        'client_id',
+        'name',
+        'domain',
+        'target_type',
+        'default_location_code',
+        'default_language_code',
+        'search_engine',
+        'tracking_frequency',
+        'is_active',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'target_type' => TargetType::class,
+            'search_engine' => SearchEngine::class,
+            'tracking_frequency' => TrackingFrequency::class,
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /**
+     * @return BelongsTo<Client, $this>
+     */
+    public function client(): BelongsTo
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * @return HasMany<Keyword, $this>
+     */
+    public function keywords(): HasMany
+    {
+        return $this->hasMany(Keyword::class);
+    }
+
+    /**
+     * @return HasMany<Report, $this>
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(Report::class);
+    }
+}

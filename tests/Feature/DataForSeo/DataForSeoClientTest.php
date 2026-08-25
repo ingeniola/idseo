@@ -8,6 +8,7 @@ use App\DataForSeo\Events\DataForSeoRequestCompleted;
 use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\Exceptions\DataForSeoPermanentException;
 use App\DataForSeo\Exceptions\DataForSeoTransientException;
+use App\Models\DataForSeoRequestLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -134,7 +135,7 @@ test('una respuesta malformada (sin los campos requeridos del sobre) lanza una e
     ]);
 })->throws(CannotCreateData::class);
 
-test('un timeout de conexión se reintenta hasta agotar los intentos', function () {
+test('un timeout de conexión se reintenta hasta agotar los intentos y cada intento queda auditado', function () {
     Http::fake([
         '*/serp/google/organic/task_post' => Http::failedConnection(),
     ]);
@@ -148,6 +149,8 @@ test('un timeout de conexión se reintenta hasta agotar los intentos', function 
     }
 
     Http::assertSentCount(4);
+    expect(DataForSeoRequestLog::query()->count())->toBe(4);
+    expect(DataForSeoRequestLog::query()->whereNull('http_status')->count())->toBe(4);
 });
 
 test('post() no manda el request cuando el circuit breaker de presupuesto está activo', function () {

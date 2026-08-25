@@ -86,11 +86,15 @@ class DataForSeoClient
                         ->timeout($this->timeout)
                         ->send($method, $endpoint, $payload === null ? [] : ['json' => $payload]);
                 } catch (ConnectionException $exception) {
+                    $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
+
                     Log::warning('dataforseo.connection_failed', [
                         'method' => $method,
                         'endpoint' => $endpoint,
                         'message' => $exception->getMessage(),
                     ]);
+
+                    $this->record($method, $endpoint, null, $durationMs, null, null);
 
                     throw $exception;
                 }
@@ -150,7 +154,7 @@ class DataForSeoClient
     private function record(
         string $method,
         string $endpoint,
-        int $httpStatus,
+        ?int $httpStatus,
         int $durationMs,
         ?int $apiStatusCode,
         ?float $cost,

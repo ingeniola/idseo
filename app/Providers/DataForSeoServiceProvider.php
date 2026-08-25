@@ -7,19 +7,18 @@ namespace App\Providers;
 use App\DataForSeo\CostControl\BudgetChecker;
 use App\DataForSeo\CostControl\CircuitBreaker;
 use App\DataForSeo\DataForSeoClient;
-use App\DataForSeo\Events\DataForSeoRequestCompleted;
-use App\Listeners\RecordDataForSeoCost;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
+/**
+ * Los listeners de DataForSeoRequestCompleted (RecordDataForSeoCost,
+ * RecordDataForSeoRequestLog) NO se registran aquí a mano: Laravel los
+ * descubre automáticamente por convención (un método handle() tipado
+ * al evento en app/Listeners). Registrarlos también manualmente los
+ * duplicaba.
+ */
 class DataForSeoServiceProvider extends ServiceProvider
 {
-    public function boot(): void
-    {
-        Event::listen(DataForSeoRequestCompleted::class, RecordDataForSeoCost::class);
-    }
-
     public function register(): void
     {
         $this->app->singleton(BudgetChecker::class, function () {

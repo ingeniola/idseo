@@ -34,6 +34,12 @@ class CostLedger extends Model
         'task_reference',
     ];
 
+    /**
+     * `date` NO se castea a 'date': Eloquent guarda ese cast con sufijo
+     * " 00:00:00" (usa el dateFormat de la conexión), lo que rompe
+     * comparaciones whereBetween con strings 'Y-m-d' planos. Se maneja
+     * como string 'Y-m-d' consistentemente.
+     */
     protected function casts(): array
     {
         return [
