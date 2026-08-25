@@ -82,8 +82,28 @@
     },
     "repositories": [
         {
-            "type": "git",
-            "url": "https://github.com/phpstan/phpstan.git"
+            "type": "package",
+            "package": {
+                "name": "phpstan/phpstan",
+                "version": "2.2.9",
+                "type": "library",
+                "license": ["MIT"],
+                "require": {
+                    "php": "^7.4|^8.0"
+                },
+                "conflict": {
+                    "phpstan/phpstan-shim": "*"
+                },
+                "bin": ["phpstan", "phpstan.phar"],
+                "autoload": {
+                    "files": ["bootstrap.php"]
+                },
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/phpstan/phpstan.git",
+                    "reference": "13d6b4f347bad222da436580c8304fa6f83e6bd0"
+                }
+            }
         }
     ],
     "config": {
