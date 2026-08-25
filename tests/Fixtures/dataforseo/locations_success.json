@@ -1,0 +1,51 @@
+{
+    "version": "0.1.20250101",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "time": "0.5 sec.",
+    "cost": 0,
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+        {
+            "id": "08251234-1535-0066-0000-9c1a2f3e4b5d",
+            "status_code": 20000,
+            "status_message": "Ok.",
+            "time": "0.4 sec.",
+            "cost": 0,
+            "result_count": 4,
+            "path": ["v3", "serp", "google", "locations"],
+            "data": {"api": "serp", "function": "locations", "se": "google"},
+            "result": [
+                {
+                    "location_code": 1012678,
+                    "location_name": "Tegucigalpa,Francisco Morazan,Honduras",
+                    "location_code_parent": 20174,
+                    "country_iso_code": "HN",
+                    "location_type": "City"
+                },
+                {
+                    "location_code": 2840,
+                    "location_name": "United States",
+                    "location_code_parent": null,
+                    "country_iso_code": "US",
+                    "location_type": "Country"
+                },
+                {
+                    "location_code": 20174,
+                    "location_name": "Francisco Morazan,Honduras",
+                    "location_code_parent": 2340,
+                    "country_iso_code": "HN",
+                    "location_type": "Region"
+                },
+                {
+                    "location_code": 2340,
+                    "location_name": "Honduras",
+                    "location_code_parent": null,
+                    "country_iso_code": "HN",
+                    "location_type": "Country"
+                }
+            ]
+        }
+    ]
+}

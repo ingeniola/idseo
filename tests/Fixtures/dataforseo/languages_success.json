@@ -1,0 +1,25 @@
+{
+    "version": "0.1.20250101",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "time": "0.1 sec.",
+    "cost": 0,
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+        {
+            "id": "08251234-1535-0066-0000-9c1a2f3e4b5e",
+            "status_code": 20000,
+            "status_message": "Ok.",
+            "time": "0.05 sec.",
+            "cost": 0,
+            "result_count": 2,
+            "path": ["v3", "serp", "google", "languages"],
+            "data": {"api": "serp", "function": "languages", "se": "google"},
+            "result": [
+                {"language_name": "Spanish", "language_code": "es"},
+                {"language_name": "English", "language_code": "en"}
+            ]
+        }
+    ]
+}
