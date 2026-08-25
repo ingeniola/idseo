@@ -2,16 +2,21 @@
 
 declare(strict_types=1);
 
+use App\DataForSeo\CostControl\CircuitBreaker;
 use App\DataForSeo\DataForSeoClient;
 use App\DataForSeo\Events\DataForSeoRequestCompleted;
+use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\Exceptions\DataForSeoPermanentException;
 use App\DataForSeo\Exceptions\DataForSeoTransientException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Spatie\LaravelData\Exceptions\CannotCreateData;
+
+uses(RefreshDatabase::class);
 
 function dataForSeoFixture(string $name): array
 {
@@ -143,6 +148,22 @@ test('un timeout de conexión se reintenta hasta agotar los intentos', function 
     }
 
     Http::assertSentCount(4);
+});
+
+test('post() no manda el request cuando el circuit breaker de presupuesto está activo', function () {
+    Http::fake();
+
+    app(CircuitBreaker::class)->trip('presupuesto agotado (prueba)');
+
+    try {
+        app(DataForSeoClient::class)->post('serp/google/organic/task_post', [
+            ['keyword' => 'zapatos deportivos'],
+        ]);
+    } catch (DataForSeoBudgetExceededException) {
+        // esperado
+    }
+
+    Http::assertNothingSent();
 });
 
 test('post() rechaza lotes que exceden el máximo de tareas por request', function () {

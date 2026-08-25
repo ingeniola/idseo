@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\DataForSeo;
 
+use App\DataForSeo\CostControl\CircuitBreaker;
 use App\DataForSeo\Data\DataForSeoResponseData;
 use App\DataForSeo\Events\DataForSeoRequestCompleted;
+use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\Exceptions\DataForSeoPermanentException;
 use App\DataForSeo\Exceptions\DataForSeoTransientException;
 use Illuminate\Http\Client\ConnectionException;
@@ -36,6 +38,7 @@ class DataForSeoClient
         private readonly int $timeout,
         private readonly int $rateLimitPerMinute,
         private readonly int $maxTasksPerRequest,
+        private readonly CircuitBreaker $circuitBreaker,
     ) {}
 
     /**
@@ -49,6 +52,12 @@ class DataForSeoClient
                 count($tasks),
                 $this->maxTasksPerRequest,
             ));
+        }
+
+        if ($this->circuitBreaker->checkGlobalBudget()) {
+            throw new DataForSeoBudgetExceededException(
+                $this->circuitBreaker->reason() ?? 'El circuit breaker de presupuesto está activo.',
+            );
         }
 
         return $this->send('POST', $endpoint, $tasks);
