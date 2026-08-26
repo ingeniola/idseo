@@ -9,9 +9,9 @@ use App\Models\Project;
 use App\Models\ProjectVisibilitySnapshot;
 use App\Models\Ranking;
 use App\Models\Report;
+use App\Support\StoredFileDataUri;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Arma los datos de un Report (sección 5.4 del SPEC): resumen
@@ -83,33 +83,9 @@ class ReportDataBuilder
             topGains: $topGains,
             topLosses: $topLosses,
             newKeywordsInTop10: $newKeywordsInTop10,
-            logoDataUri: $this->logoDataUri($brandingOverrides['logo_path'] ?? $client->logo_path),
+            logoDataUri: StoredFileDataUri::from($brandingOverrides['logo_path'] ?? $client->logo_path),
             primaryColor: $brandingOverrides['primary_color'] ?? $client->primary_color ?? '#111827',
         );
-    }
-
-    /**
-     * El logo se guarda como archivo en disco (Filament FileUpload,
-     * sección 5.1); Chromium (Browsershot) renderiza el HTML en un
-     * proceso aparte que no tiene por qué ver la misma ruta local, y
-     * exponer el disco por HTTP solo para esto sería más superficie
-     * de la necesaria. Un data URI embebido evita ambos problemas.
-     */
-    private function logoDataUri(?string $path): ?string
-    {
-        if (blank($path)) {
-            return null;
-        }
-
-        $disk = Storage::disk(config('filament.default_filesystem_disk', 'local'));
-
-        if (! $disk->exists($path)) {
-            return null;
-        }
-
-        $mimeType = $disk->mimeType($path) ?: 'image/png';
-
-        return 'data:'.$mimeType.';base64,'.base64_encode($disk->get($path));
     }
 
     /**

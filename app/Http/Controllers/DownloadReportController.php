@@ -11,18 +11,18 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Descarga interna de un reporte ya generado. El portal de cliente
- * (Fase 1, paso 11) tendrá su propia ruta de descarga con su propia
- * autorización — esta es solo para el equipo de Ingenio desde el
- * panel Filament, por eso basta con isInternal() y no hace falta una
- * Policy todavía (el "endurecimiento" de autorización es la Fase 1,
- * paso 12).
+ * Descarga de un reporte ya generado, compartida entre el panel
+ * interno y el portal de cliente (Fase 1, paso 11): un usuario interno
+ * puede descargar cualquier reporte, uno del portal solo los de
+ * proyectos de su propio cliente — ver ReportPolicy::view(). Una sola
+ * ruta con autorización por Policy es más simple que mantener dos
+ * endpoints de descarga idénticos con reglas de acceso distintas.
  */
 class DownloadReportController extends Controller
 {
     public function __invoke(Request $request, Report $report): StreamedResponse
     {
-        abort_unless($request->user()?->role->isInternal(), 403);
+        abort_unless($request->user()?->can('view', $report), 403);
         abort_unless($report->status === ReportStatus::Completed && filled($report->file_path), 404);
 
         $fileName = "reporte-{$report->project->name}-{$report->period_start}.pdf";

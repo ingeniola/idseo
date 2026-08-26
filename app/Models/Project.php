@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * @property int $id
@@ -93,5 +94,13 @@ class Project extends Model
     public function visibilitySnapshots(): HasMany
     {
         return $this->hasMany(ProjectVisibilitySnapshot::class);
+    }
+
+    /**
+     * @return HasOne<ProjectVisibilitySnapshot, $this>
+     */
+    public function latestVisibilitySnapshot(): HasOne
+    {
+        return $this->hasOne(ProjectVisibilitySnapshot::class)->latestOfMany('calculated_at');
     }
 }
