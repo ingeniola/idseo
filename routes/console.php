@@ -2,6 +2,7 @@
 
 use App\Jobs\CalculateProjectVisibility;
 use App\Jobs\CalculateSerpCompetitors;
+use App\Jobs\DetectRankingAlerts;
 use App\Jobs\GenerateScheduledReports;
 use App\Jobs\ReconcilePendingTasks;
 use App\Jobs\ScheduleRankTrackingTasks;
@@ -21,6 +22,10 @@ Schedule::job(new CalculateProjectVisibility)->dailyAt('06:00');
 // depende de CalculateProjectVisibility, solo comparte el horario de
 // "derivados diarios, sin costo de API".
 Schedule::job(new CalculateSerpCompetitors)->dailyAt('06:15');
+// Fase 2: alertas. 06:30 según la tabla de la sección 6 del SPEC —
+// después de CalculateSerpCompetitors para no competir por recursos a
+// la misma hora exacta.
+Schedule::job(new DetectRankingAlerts)->dailyAt('06:30');
 Schedule::job(new GenerateScheduledReports)->monthlyOn(1, '07:00');
 
 /**

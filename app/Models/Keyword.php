@@ -93,4 +93,15 @@ class Keyword extends Model
     {
         return $this->hasOne(SerpSnapshot::class)->latestOfMany('captured_at');
     }
+
+    /**
+     * Fase 2: alertas (sección 5 del SPEC), calculadas por
+     * DetectRankingAlerts.
+     *
+     * @return HasMany<RankingAlert, $this>
+     */
+    public function rankingAlerts(): HasMany
+    {
+        return $this->hasMany(RankingAlert::class);
+    }
 }

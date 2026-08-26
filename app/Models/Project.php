@@ -141,4 +141,15 @@ class Project extends Model
             'session_id',
         );
     }
+
+    /**
+     * Fase 2: alertas (sección 5 del SPEC), calculadas por
+     * DetectRankingAlerts.
+     *
+     * @return HasMany<RankingAlert, $this>
+     */
+    public function rankingAlerts(): HasMany
+    {
+        return $this->hasMany(RankingAlert::class);
+    }
 }
