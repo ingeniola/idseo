@@ -65,4 +65,19 @@ return [
 
     'search_volume_live_cost_estimate' => env('DATAFORSEO_SEARCH_VOLUME_LIVE_COST_ESTIMATE'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Estimación de costo — investigación de keywords (Labs, Live)
+    |--------------------------------------------------------------------------
+    |
+    | dataforseo_labs/google/keyword_ideas/live (Fase 2, sección 5.2 del
+    | SPEC: "Investigación de keywords"). Mismo caso que la estimación
+    | de arriba: no se encontró un precio confirmado en la
+    | documentación pública disponible al construir este módulo — llenar
+    | con el precio real de la cuenta antes de usarlo en producción.
+    |
+    */
+
+    'keyword_ideas_live_cost_estimate' => env('DATAFORSEO_KEYWORD_IDEAS_LIVE_COST_ESTIMATE'),
+
 ];

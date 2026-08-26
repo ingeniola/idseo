@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
@@ -113,5 +114,31 @@ class Project extends Model
     public function serpCompetitors(): HasMany
     {
         return $this->hasMany(SerpCompetitor::class);
+    }
+
+    /**
+     * Fase 2: investigación de keywords (sección 5 del SPEC).
+     *
+     * @return HasMany<KeywordResearchSession, $this>
+     */
+    public function keywordResearchSessions(): HasMany
+    {
+        return $this->hasMany(KeywordResearchSession::class);
+    }
+
+    /**
+     * Ideas de todas las sesiones de investigación del proyecto, para
+     * la pestaña de "Investigación de keywords" en Editar Proyecto.
+     *
+     * @return HasManyThrough<KeywordIdea, KeywordResearchSession, $this>
+     */
+    public function keywordIdeas(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            KeywordIdea::class,
+            KeywordResearchSession::class,
+            'project_id',
+            'session_id',
+        );
     }
 }

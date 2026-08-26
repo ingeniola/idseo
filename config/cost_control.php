@@ -44,10 +44,12 @@ return [
     | DataForSeoClient (que protege contra pasarnos del límite de la
     | API): esto protege contra que una persona dispare la misma acción
     | paga muchas veces seguidas por error (doble clic, F5 repetido).
-    | Por ahora la única acción paga disparada directamente por un
-    | usuario desde la UI es "Enriquecer volumen" (Live, keywords_data);
-    | el resto de las llamadas pagas las disparan jobs programados, no
-    | una ruta HTTP.
+    | Genérico para cualquier acción paga disparada directamente desde
+    | la UI: "Enriquecer volumen" (Fase 1, keywords_data/search_volume)
+    | y "Buscar ideas de keywords" (Fase 2, dataforseo_labs/keyword_ideas)
+    | usan esta misma configuración, cada una con su propia clave de
+    | RateLimiter. El resto de las llamadas pagas las disparan jobs
+    | programados, no una ruta HTTP.
     |
     */
 
