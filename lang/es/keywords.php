@@ -16,6 +16,35 @@ return [
         'competition' => 'Competencia',
         'volume_updated_at' => 'Volumen actualizado',
         'is_active' => 'Activa',
+        'current_position' => 'Posición',
+        'position_change' => 'Cambio',
+        'ranking_url' => 'URL rankeando',
+        'serp_features' => 'Features',
+    ],
+
+    'movement' => [
+        'up' => 'Subió',
+        'down' => 'Bajó',
+        'same' => 'Igual',
+        'none' => 'Sin dato',
+    ],
+
+    'filters' => [
+        'tags' => 'Etiqueta',
+        'position_range' => 'Rango de posición',
+        'position_min' => 'Desde',
+        'position_max' => 'Hasta',
+        'position_min_indicator' => 'Posición desde: :value',
+        'position_max_indicator' => 'Posición hasta: :value',
+        'movement' => 'Movimiento',
+    ],
+
+    'ranking_history' => [
+        'action' => 'Ver evolución',
+        'modal_heading' => 'Evolución de ":keyword"',
+        'chart_heading' => 'Posición de ":keyword" en el tiempo',
+        'dataset_label' => 'Posición',
+        'close' => 'Cerrar',
     ],
 
     'bulk_paste' => [

@@ -44,3 +44,13 @@ test('la pagina de edicion de proyecto carga con la seccion de keywords', functi
         ->get("/admin/projects/{$project->id}/edit")
         ->assertSuccessful();
 });
+
+test('la pagina de edicion de proyecto incluye la grafica de visibilidad agregada', function () {
+    $admin = User::factory()->create(['role' => UserRole::Admin]);
+    $project = Project::factory()->create();
+
+    $this->actingAs($admin)
+        ->get("/admin/projects/{$project->id}/edit")
+        ->assertSuccessful()
+        ->assertSee(__('projects.visibility_chart.heading'));
+});

@@ -21,4 +21,9 @@ return [
         'keywords_count' => 'Keywords',
         'created_at' => 'Creado',
     ],
+
+    'visibility_chart' => [
+        'heading' => 'Visibilidad agregada del proyecto',
+        'dataset_label' => 'Visibilidad',
+    ],
 ];

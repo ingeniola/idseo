@@ -11,6 +11,7 @@ use App\Models\Keyword;
 use App\Models\Language;
 use App\Models\Location;
 use App\Models\Project;
+use App\Models\Ranking;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -28,9 +29,14 @@ use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\Indicator;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 class KeywordsRelationManager extends RelationManager
@@ -91,11 +97,52 @@ class KeywordsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('keyword')
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('latestRanking'))
             ->columns([
                 TextColumn::make('keyword')
                     ->label(__('keywords.fields.keyword'))
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('latestRanking.position')
+                    ->label(__('keywords.fields.current_position'))
+                    ->numeric()
+                    ->placeholder('—')
+                    ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy(
+                        Ranking::query()
+                            ->select('position')
+                            ->whereColumn('rankings.keyword_id', 'keywords.id')
+                            ->orderByDesc('checked_at')
+                            ->limit(1),
+                        $direction,
+                    )),
+                TextColumn::make('position_change')
+                    ->label(__('keywords.fields.position_change'))
+                    ->getStateUsing(function (Keyword $record) {
+                        $latest = $record->latestRanking;
+
+                        if ($latest === null || $latest->position === null || $latest->previous_position === null) {
+                            return null;
+                        }
+
+                        return $latest->previous_position - $latest->position;
+                    })
+                    ->formatStateUsing(fn (?int $state) => match (true) {
+                        $state === null => '—',
+                        $state > 0 => "▲ {$state}",
+                        $state < 0 => '▼ '.abs($state),
+                        default => __('keywords.movement.same'),
+                    })
+                    ->color(fn (?int $state) => match (true) {
+                        $state === null => 'gray',
+                        $state > 0 => 'success',
+                        $state < 0 => 'danger',
+                        default => 'gray',
+                    }),
+                TextColumn::make('latestRanking.url')
+                    ->label(__('keywords.fields.ranking_url'))
+                    ->url(fn (Keyword $record) => $record->latestRanking?->url, shouldOpenInNewTab: true)
+                    ->limit(40)
+                    ->placeholder('—'),
                 TextColumn::make('location_code')
                     ->label(__('keywords.fields.location_code'))
                     ->formatStateUsing(function (?int $state) {
@@ -121,6 +168,10 @@ class KeywordsRelationManager extends RelationManager
                     ->money('usd')
                     ->sortable()
                     ->placeholder('—'),
+                TextColumn::make('latestRanking.serp_features')
+                    ->label(__('keywords.fields.serp_features'))
+                    ->badge()
+                    ->placeholder('—'),
                 TextColumn::make('volume_updated_at')
                     ->label(__('keywords.fields.volume_updated_at'))
                     ->dateTime()
@@ -132,7 +183,9 @@ class KeywordsRelationManager extends RelationManager
                     ->boolean(),
             ])
             ->filters([
-                //
+                $this->tagsFilter(),
+                self::positionRangeFilter(),
+                self::movementFilter(),
             ])
             ->headerActions([
                 CreateAction::make(),
@@ -142,6 +195,7 @@ class KeywordsRelationManager extends RelationManager
                     ->options(fn () => ['project_id' => $this->getOwnerRecord()->getKey()]),
             ])
             ->recordActions([
+                self::rankingHistoryAction(),
                 EditAction::make(),
                 DeleteAction::make(),
             ])
@@ -151,6 +205,117 @@ class KeywordsRelationManager extends RelationManager
                     DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private function tagsFilter(): SelectFilter
+    {
+        return SelectFilter::make('tags')
+            ->label(__('keywords.filters.tags'))
+            ->multiple()
+            ->options(fn () => $this->tagFilterOptions())
+            ->query(function (Builder $query, array $data) {
+                $values = $data['values'] ?? [];
+
+                if (blank($values)) {
+                    return $query;
+                }
+
+                return $query->where(function (Builder $query) use ($values) {
+                    foreach ($values as $tag) {
+                        $query->orWhereJsonContains('tags', $tag);
+                    }
+                });
+            });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function tagFilterOptions(): array
+    {
+        /** @var Project $project */
+        $project = $this->getOwnerRecord();
+
+        return $project->keywords()
+            ->whereNotNull('tags')
+            ->pluck('tags')
+            ->flatten()
+            ->filter()
+            ->unique()
+            ->sort()
+            ->mapWithKeys(fn (string $tag) => [$tag => $tag])
+            ->all();
+    }
+
+    private static function positionRangeFilter(): Filter
+    {
+        return Filter::make('position_range')
+            ->label(__('keywords.filters.position_range'))
+            ->schema([
+                TextInput::make('min')
+                    ->label(__('keywords.filters.position_min'))
+                    ->numeric()
+                    ->minValue(1),
+                TextInput::make('max')
+                    ->label(__('keywords.filters.position_max'))
+                    ->numeric()
+                    ->minValue(1),
+            ])
+            ->query(fn (Builder $query, array $data) => $query
+                ->when(
+                    filled($data['min'] ?? null),
+                    fn (Builder $query) => $query->whereHas('latestRanking', fn (Builder $query) => $query->where('position', '>=', $data['min'])),
+                )
+                ->when(
+                    filled($data['max'] ?? null),
+                    fn (Builder $query) => $query->whereHas('latestRanking', fn (Builder $query) => $query->where('position', '<=', $data['max'])),
+                ))
+            ->indicateUsing(function (array $data): array {
+                $indicators = [];
+
+                if (filled($data['min'] ?? null)) {
+                    $indicators[] = Indicator::make(__('keywords.filters.position_min_indicator', ['value' => $data['min']]))->removeField('min');
+                }
+
+                if (filled($data['max'] ?? null)) {
+                    $indicators[] = Indicator::make(__('keywords.filters.position_max_indicator', ['value' => $data['max']]))->removeField('max');
+                }
+
+                return $indicators;
+            });
+    }
+
+    private static function movementFilter(): SelectFilter
+    {
+        return SelectFilter::make('movement')
+            ->label(__('keywords.filters.movement'))
+            ->options([
+                'up' => __('keywords.movement.up'),
+                'down' => __('keywords.movement.down'),
+                'same' => __('keywords.movement.same'),
+                'none' => __('keywords.movement.none'),
+            ])
+            ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
+                'up' => $query->whereHas('latestRanking', fn (Builder $query) => $query->whereColumn('position', '<', 'previous_position')),
+                'down' => $query->whereHas('latestRanking', fn (Builder $query) => $query->whereColumn('position', '>', 'previous_position')),
+                'same' => $query->whereHas('latestRanking', fn (Builder $query) => $query->whereColumn('position', '=', 'previous_position')),
+                'none' => $query->where(fn (Builder $query) => $query
+                    ->whereDoesntHave('latestRanking')
+                    ->orWhereHas('latestRanking', fn (Builder $query) => $query->whereNull('position'))),
+                default => $query,
+            });
+    }
+
+    private static function rankingHistoryAction(): Action
+    {
+        return Action::make('rankingHistory')
+            ->label(__('keywords.ranking_history.action'))
+            ->icon(Heroicon::OutlinedChartBar)
+            ->color('gray')
+            ->modalHeading(fn (Keyword $record) => __('keywords.ranking_history.modal_heading', ['keyword' => $record->keyword]))
+            ->modalContent(fn (Keyword $record) => view('filament.modals.keyword-ranking-chart', ['keyword' => $record]))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel(__('keywords.ranking_history.close'));
     }
 
     private static function bulkPasteAction(): Action
