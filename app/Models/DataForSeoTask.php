@@ -31,6 +31,8 @@ class DataForSeoTask extends Model
     /** @use HasFactory<DataForSeoTaskFactory> */
     use HasFactory;
 
+    protected $table = 'dataforseo_tasks';
+
     protected $fillable = [
         'task_id',
         'endpoint',

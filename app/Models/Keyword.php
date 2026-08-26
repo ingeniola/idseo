@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -75,5 +76,13 @@ class Keyword extends Model
     public function serpSnapshots(): HasMany
     {
         return $this->hasMany(SerpSnapshot::class);
+    }
+
+    /**
+     * @return HasOne<Ranking, $this>
+     */
+    public function latestRanking(): HasOne
+    {
+        return $this->hasOne(Ranking::class)->latestOfMany('checked_at');
     }
 }

@@ -6,6 +6,7 @@ namespace App\DataForSeo\Data;
 
 use Spatie\LaravelData\Attributes\DataCollectionOf;
 use Spatie\LaravelData\Attributes\MapInputName;
+use Spatie\LaravelData\Attributes\MapOutputName;
 use Spatie\LaravelData\Data;
 use Spatie\LaravelData\Mappers\SnakeCaseMapper;
 
@@ -14,8 +15,16 @@ use Spatie\LaravelData\Mappers\SnakeCaseMapper;
  * DataForSEO. La forma de `TaskData::$result` es específica de cada
  * endpoint y se tipa en la capa de "endpoints por servicio" de fases
  * posteriores; aquí solo se modela lo que es común a toda la API.
+ *
+ * MapOutputName además de MapInputName: cuando toArray()/toJson() se
+ * usa para volver a guardar la respuesta (ej. ReconcilePendingTasks
+ * guardando el resultado de task_get como si fuera un postback), el
+ * JSON tiene que quedar en snake_case igual que el payload real de
+ * DataForSEO, para que el mismo código de procesamiento sirva para
+ * ambos casos.
  */
 #[MapInputName(SnakeCaseMapper::class)]
+#[MapOutputName(SnakeCaseMapper::class)]
 final class DataForSeoResponseData extends Data
 {
     private const SUCCESS_RANGE_START = 20000;

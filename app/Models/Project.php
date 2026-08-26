@@ -86,4 +86,12 @@ class Project extends Model
     {
         return $this->belongsToMany(User::class);
     }
+
+    /**
+     * @return HasMany<ProjectVisibilitySnapshot, $this>
+     */
+    public function visibilitySnapshots(): HasMany
+    {
+        return $this->hasMany(ProjectVisibilitySnapshot::class);
+    }
 }
