@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-enum SearchEngine: string
+use Filament\Support\Contracts\HasLabel;
+
+enum SearchEngine: string implements HasLabel
 {
     case Google = 'google';
     case Bing = 'bing';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Google => 'Google',

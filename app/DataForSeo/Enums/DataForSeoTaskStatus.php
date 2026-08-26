@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\DataForSeo\Enums;
 
-enum DataForSeoTaskStatus: string
+use Filament\Support\Contracts\HasLabel;
+
+enum DataForSeoTaskStatus: string implements HasLabel
 {
     case Pending = 'pending';
     case Completed = 'completed';
     case Failed = 'failed';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Pending => 'Pendiente',

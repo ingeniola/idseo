@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-enum TargetType: string
+use Filament\Support\Contracts\HasLabel;
+
+enum TargetType: string implements HasLabel
 {
     case Domain = 'domain';
     case Subdomain = 'subdomain';
     case Url = 'url';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Domain => 'Dominio completo',

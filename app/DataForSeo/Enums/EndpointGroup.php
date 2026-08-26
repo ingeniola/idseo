@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\DataForSeo\Enums;
 
+use Filament\Support\Contracts\HasLabel;
+
 /**
  * Categorías de nivel superior de la API v3 de DataForSEO
  * (https://docs.dataforseo.com/v3/), usadas para agrupar gasto en
  * `cost_ledger` sin recurrir a strings sueltos.
  */
-enum EndpointGroup: string
+enum EndpointGroup: string implements HasLabel
 {
     case Serp = 'serp';
     case KeywordsData = 'keywords_data';
@@ -24,7 +26,7 @@ enum EndpointGroup: string
     case AiOptimization = 'ai_optimization';
     case Appendix = 'appendix';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Serp => 'Resultados de búsqueda (SERP)',

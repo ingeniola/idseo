@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-enum ReportStatus: string
+use Filament\Support\Contracts\HasLabel;
+
+enum ReportStatus: string implements HasLabel
 {
     case Pending = 'pending';
     case Generating = 'generating';
     case Completed = 'completed';
     case Failed = 'failed';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Pending => 'Pendiente',

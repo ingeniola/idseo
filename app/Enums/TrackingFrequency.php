@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-enum TrackingFrequency: string
+use Filament\Support\Contracts\HasLabel;
+
+enum TrackingFrequency: string implements HasLabel
 {
     case Daily = 'daily';
     case Weekly = 'weekly';
     case Monthly = 'monthly';
 
-    public function label(): string
+    public function getLabel(): string
     {
         return match ($this) {
             self::Daily => 'Diaria',
