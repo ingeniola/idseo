@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DataForSeoPostbackController;
+use App\Http\Controllers\DownloadReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -9,3 +10,7 @@ Route::get('/', function () {
 
 Route::post('/webhooks/dataforseo/{type}', DataForSeoPostbackController::class)
     ->name('webhooks.dataforseo.postback');
+
+Route::get('/reports/{report}/download', DownloadReportController::class)
+    ->middleware('auth')
+    ->name('reports.download');

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Enums\ReportSection;
 use App\Models\ReportTemplate;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -19,7 +20,14 @@ class ReportTemplateFactory extends Factory
         return [
             'client_id' => null,
             'name' => $this->faker->words(2, true).' template',
-            'sections' => ['resumen_ejecutivo', 'evolucion_visibilidad', 'tabla_posiciones'],
+            'sections' => [
+                ReportSection::ExecutiveSummary->value,
+                ReportSection::VisibilityEvolution->value,
+                ReportSection::PositionsTable->value,
+                ReportSection::TopGains->value,
+                ReportSection::TopLosses->value,
+                ReportSection::NewKeywordsInTop10->value,
+            ],
             'branding_overrides' => null,
         ];
     }
