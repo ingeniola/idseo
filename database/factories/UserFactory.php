@@ -33,6 +33,14 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'role' => UserRole::Analyst,
             'client_id' => null,
+            // 2FA obligatorio para el panel interno (sección 9 y Fase 1
+            // paso 12 del SPEC): un usuario de fábrica "listo para
+            // usar" ya lo tiene configurado, para que actingAs() en
+            // las pruebas no choque contra la página de configuración
+            // requerida de Filament. No es un secreto TOTP real — solo
+            // necesita no estar vacío, porque eso es lo único que
+            // AppAuthentication::isEnabled() comprueba.
+            'app_authentication_secret' => Str::random(32),
         ];
     }
 
@@ -43,6 +51,16 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    /**
+     * Para probar explícitamente el flujo de "todavía no configuró 2FA".
+     */
+    public function withoutMultiFactorAuthentication(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'app_authentication_secret' => null,
         ]);
     }
 }

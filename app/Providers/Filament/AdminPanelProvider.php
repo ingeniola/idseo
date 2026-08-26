@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -31,6 +32,14 @@ class AdminPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Amber,
             ])
+            // 2FA para usuarios internos (sección 9 y Fase 1 paso 12 del
+            // SPEC): TOTP con app autenticadora, obligatorio para
+            // entrar al panel — Filament redirige solo a la página de
+            // configuración a quien todavía no lo haya activado.
+            ->multiFactorAuthentication([
+                AppAuthentication::make()->recoverable(),
+            ])
+            ->requiresMultiFactorAuthentication()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

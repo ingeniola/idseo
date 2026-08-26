@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Projects\RelationManagers;
 
+use App\Audit\AuditLogger;
 use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\KeywordData\EnrichKeywordVolumes;
+use App\Enums\AuditEvent;
 use App\Filament\Imports\KeywordImporter;
 use App\Models\Keyword;
 use App\Models\Language;
@@ -38,6 +40,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\RateLimiter;
 
 class KeywordsRelationManager extends RelationManager
 {
@@ -384,8 +387,29 @@ class KeywordsRelationManager extends RelationManager
             })
             ->modalSubmitActionLabel(__('keywords.enrich.submit'))
             ->action(function (Collection $records) {
+                $rateLimitKey = 'enrich-volume:'.auth()->id();
+                $maxAttempts = (int) config('cost_control.paid_action_rate_limit.max_attempts');
+                $decaySeconds = (int) config('cost_control.paid_action_rate_limit.decay_seconds');
+
+                if (RateLimiter::tooManyAttempts($rateLimitKey, $maxAttempts)) {
+                    Notification::make()
+                        ->title(__('keywords.enrich.rate_limited', ['seconds' => RateLimiter::availableIn($rateLimitKey)]))
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                RateLimiter::hit($rateLimitKey, $decaySeconds);
+
                 /** @var Collection<int, Keyword> $keywords */
                 $keywords = $records;
+
+                app(AuditLogger::class)->log(
+                    AuditEvent::PaidActionTriggered,
+                    user: auth()->user(),
+                    context: ['action' => 'enrich_volume', 'keyword_count' => $keywords->count()],
+                );
 
                 try {
                     $result = app(EnrichKeywordVolumes::class)->execute($keywords);

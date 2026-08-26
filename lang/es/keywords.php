@@ -63,5 +63,6 @@ return [
         'submit' => 'Enriquecer',
         'budget_exceeded' => 'No se pudo enriquecer: el circuit breaker de presupuesto está activo.',
         'success' => ':updated de :requested keyword(s) actualizadas.',
+        'rate_limited' => 'Demasiados intentos seguidos. Espera :seconds segundos antes de volver a intentarlo.',
     ],
 ];

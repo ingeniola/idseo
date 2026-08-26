@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Audit\AuditLogger;
+use App\Enums\AuditEvent;
 use App\Enums\UserRole;
+use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -18,9 +21,24 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureUserIsClient
 {
+    public function __construct(
+        private readonly AuditLogger $auditLogger,
+    ) {}
+
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless($request->user()?->role === UserRole::Client, 403);
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user?->role !== UserRole::Client) {
+            $this->auditLogger->log(
+                AuditEvent::AuthorizationDenied,
+                user: $user,
+                context: ['reason' => 'not_client_role', 'path' => $request->path()],
+            );
+
+            abort(403);
+        }
 
         return $next($request);
     }
