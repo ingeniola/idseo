@@ -35,3 +35,12 @@ test('asignar usuarios internos a un proyecto usa la tabla pivote project_user',
     expect($project->users()->count())->toBe(1)
         ->and($user->projects()->first()->is($project))->toBeTrue();
 });
+
+test('la pagina de edicion de proyecto carga con la seccion de keywords', function () {
+    $admin = User::factory()->create(['role' => UserRole::Admin]);
+    $project = Project::factory()->create();
+
+    $this->actingAs($admin)
+        ->get("/admin/projects/{$project->id}/edit")
+        ->assertSuccessful();
+});

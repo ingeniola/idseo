@@ -47,4 +47,22 @@ return [
 
     'max_tasks_per_request' => (int) env('DATAFORSEO_MAX_TASKS_PER_REQUEST', 100),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Estimación de costo — enriquecimiento de volumen (Live)
+    |--------------------------------------------------------------------------
+    |
+    | keywords_data/google_ads/search_volume/live cobra por llamada, sin
+    | importar el número de keywords (hasta 1000 por llamada). No se
+    | encontró un precio confirmado en la documentación pública
+    | disponible al construir este módulo — llenar este valor con el
+    | precio real de la cuenta antes de usarlo en producción. Si queda
+    | null, la UI avisa que no hay estimación configurada en vez de
+    | inventar una cifra (sección 3.5 del SPEC: "la UI muestra estimación
+    | de costo y pide confirmación").
+    |
+    */
+
+    'search_volume_live_cost_estimate' => env('DATAFORSEO_SEARCH_VOLUME_LIVE_COST_ESTIMATE'),
+
 ];
