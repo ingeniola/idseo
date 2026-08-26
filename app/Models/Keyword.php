@@ -85,4 +85,12 @@ class Keyword extends Model
     {
         return $this->hasOne(Ranking::class)->latestOfMany('checked_at');
     }
+
+    /**
+     * @return HasOne<SerpSnapshot, $this>
+     */
+    public function latestSerpSnapshot(): HasOne
+    {
+        return $this->hasOne(SerpSnapshot::class)->latestOfMany('captured_at');
+    }
 }

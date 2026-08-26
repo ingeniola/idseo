@@ -7,6 +7,7 @@ namespace App\Filament\Resources\Projects;
 use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
+use App\Filament\Resources\Projects\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\ReportsRelationManager;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
@@ -56,6 +57,7 @@ class ProjectResource extends Resource
         return [
             KeywordsRelationManager::class,
             ReportsRelationManager::class,
+            CompetitorsRelationManager::class,
         ];
     }
 

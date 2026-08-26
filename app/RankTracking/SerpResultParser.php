@@ -93,9 +93,31 @@ class SerpResultParser
 
     private function matchesTrackedDomain(string $domain): bool
     {
-        $domain = strtolower(ltrim($domain, '.'));
-        $tracked = strtolower(ltrim($this->trackedDomain, '.'));
+        return self::domainsMatch($domain, $this->trackedDomain);
+    }
 
-        return $domain === $tracked || str_ends_with($domain, '.'.$tracked);
+    /**
+     * Normaliza un dominio para compararlo (minúsculas, sin punto
+     * inicial) — expuesto como público para que otros consumidores del
+     * campo `domain` de un item SERP (ej. CalculateSerpCompetitors,
+     * Fase 2) agrupen dominios de forma consistente con el rank
+     * tracking, sin duplicar esta lógica.
+     */
+    public static function normalizeDomain(string $domain): string
+    {
+        return strtolower(ltrim($domain, '.'));
+    }
+
+    /**
+     * True si `$domain` es el mismo dominio que `$other`, o un
+     * subdominio suyo (ej. "blog.example.com" coincide con
+     * "example.com").
+     */
+    public static function domainsMatch(string $domain, string $other): bool
+    {
+        $domain = self::normalizeDomain($domain);
+        $other = self::normalizeDomain($other);
+
+        return $domain === $other || str_ends_with($domain, '.'.$other);
     }
 }

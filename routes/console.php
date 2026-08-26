@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\CalculateProjectVisibility;
+use App\Jobs\CalculateSerpCompetitors;
 use App\Jobs\GenerateScheduledReports;
 use App\Jobs\ReconcilePendingTasks;
 use App\Jobs\ScheduleRankTrackingTasks;
@@ -16,6 +17,10 @@ Artisan::command('inspire', function () {
 Schedule::job(new ScheduleRankTrackingTasks)->dailyAt('02:00');
 Schedule::job(new ReconcilePendingTasks)->hourly();
 Schedule::job(new CalculateProjectVisibility)->dailyAt('06:00');
+// Fase 2: análisis de competidores. Después de las 06:00 porque no
+// depende de CalculateProjectVisibility, solo comparte el horario de
+// "derivados diarios, sin costo de API".
+Schedule::job(new CalculateSerpCompetitors)->dailyAt('06:15');
 Schedule::job(new GenerateScheduledReports)->monthlyOn(1, '07:00');
 
 /**

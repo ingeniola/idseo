@@ -103,4 +103,15 @@ class Project extends Model
     {
         return $this->hasOne(ProjectVisibilitySnapshot::class)->latestOfMany('calculated_at');
     }
+
+    /**
+     * Fase 2: análisis de competidores derivado de los SERP snapshots
+     * (sección 5 del SPEC), calculado por CalculateSerpCompetitors.
+     *
+     * @return HasMany<SerpCompetitor, $this>
+     */
+    public function serpCompetitors(): HasMany
+    {
+        return $this->hasMany(SerpCompetitor::class);
+    }
 }
