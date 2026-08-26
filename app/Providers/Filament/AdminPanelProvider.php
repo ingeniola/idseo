@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\CostOverviewWidget;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -45,10 +46,17 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
+            // Sin discoverWidgets(): ProjectVisibilityChartWidget y
+            // KeywordRankingChartWidget (ver sus propios docblocks) son
+            // widgets embebidos a propósito — en EditProject y en el
+            // modal de evolución de keyword, respectivamente — no
+            // widgets de Escritorio. Con discoverWidgets() se montaban
+            // igual en el Dashboard global, con $record null, y salían
+            // como gráficas rotas/vacías para cualquier usuario interno.
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
+                CostOverviewWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

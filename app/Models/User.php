@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Audit\AuditLogger;
+use App\Enums\AuditEvent;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
@@ -90,10 +92,27 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
      * con rol `client` nunca debe poder entrar (sección 9 del SPEC,
      * "separación estricta de autorización"). El portal de cliente
      * propiamente dicho es la Fase 1, paso 11.
+     *
+     * Filament llama este método directamente (Login::authenticate(),
+     * su middleware Authenticate, etc.) sin pasar por
+     * EnsureUserIsClient ni ningún otro punto ya auditado — sin este
+     * log, un intento de entrar al panel interno con una cuenta de
+     * cliente quedaba completamente fuera de la auditoría de
+     * autorización (sección 9 del SPEC).
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->role->isInternal();
+        if ($this->role->isInternal()) {
+            return true;
+        }
+
+        app(AuditLogger::class)->log(
+            AuditEvent::AuthorizationDenied,
+            user: $this,
+            context: ['reason' => 'not_internal_role', 'panel' => $panel->getId()],
+        );
+
+        return false;
     }
 
     public function getAppAuthenticationSecret(): ?string
