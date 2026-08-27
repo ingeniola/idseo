@@ -41,7 +41,7 @@ class SearchLlmMentions
             'platform' => $platform,
             'language_code' => $project->default_language_code,
             'location_code' => $project->default_location_code,
-        ]]);
+        ]], $project->id);
 
         $items = $response->tasks[0]->result[0]['items'] ?? [];
         $capturedAt = now();

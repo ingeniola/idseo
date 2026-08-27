@@ -175,6 +175,35 @@ test('post() rechaza lotes que exceden el máximo de tareas por request', functi
     app(DataForSeoClient::class)->post('serp/google/organic/task_post', $tasks);
 })->throws(InvalidArgumentException::class);
 
+test('post() y get() pasan el project_id al evento para atribución de costo', function () {
+    Event::fake();
+    Http::fake([
+        '*/serp/google/organic/task_post' => Http::response(dataForSeoFixture('task_post_success'), 200),
+        '*/appendix/user_data' => Http::response(['version' => '0.1', 'status_code' => 20000, 'status_message' => 'Ok.', 'time' => '0.01 sec.', 'cost' => 0, 'tasks_count' => 0, 'tasks_error' => 0, 'tasks' => []], 200),
+    ]);
+
+    app(DataForSeoClient::class)->post('serp/google/organic/task_post', [
+        ['keyword' => 'zapatos deportivos'],
+    ], 42);
+
+    app(DataForSeoClient::class)->get('appendix/user_data', 42);
+
+    Event::assertDispatched(DataForSeoRequestCompleted::class, fn (DataForSeoRequestCompleted $event) => $event->projectId === 42);
+});
+
+test('post() y get() sin project_id despachan el evento con projectId null', function () {
+    Event::fake();
+    Http::fake([
+        '*/serp/google/organic/task_post' => Http::response(dataForSeoFixture('task_post_success'), 200),
+    ]);
+
+    app(DataForSeoClient::class)->post('serp/google/organic/task_post', [
+        ['keyword' => 'zapatos deportivos'],
+    ]);
+
+    Event::assertDispatched(DataForSeoRequestCompleted::class, fn (DataForSeoRequestCompleted $event) => $event->projectId === null);
+});
+
 test('get() no manda body y usa autenticación básica', function () {
     Http::fake([
         '*/appendix/user_data' => Http::response([

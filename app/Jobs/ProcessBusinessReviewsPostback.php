@@ -63,7 +63,7 @@ class ProcessBusinessReviewsPostback implements ShouldQueue
             return;
         }
 
-        $response = $client->get(self::TASK_GET_ENDPOINT.$task->task_id);
+        $response = $client->get(self::TASK_GET_ENDPOINT.$task->task_id, $project->id);
         $resultData = $response->tasks[0]->result[0] ?? null;
         $items = is_array($resultData) ? ($resultData['items'] ?? []) : [];
 

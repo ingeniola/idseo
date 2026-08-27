@@ -57,7 +57,16 @@ class EnrichKeywordVolumes
             array_values($groups),
         );
 
-        $response = $this->client->post(self::ENDPOINT, $tasks);
+        // Atribución de costo (sección 3.5 del SPEC): solo se atribuye
+        // a un proyecto si TODAS las keywords enriquecidas en esta
+        // llamada son del mismo proyecto — el caso normal, ya que esta
+        // acción se dispara desde la pestaña de un solo proyecto. Si
+        // llegara a abarcar varios (uso futuro de esta clase fuera de
+        // esa pantalla), se deja sin atribuir en vez de inventarla.
+        $projectIds = $keywords->pluck('project_id')->unique();
+        $projectId = $projectIds->count() === 1 ? $projectIds->first() : null;
+
+        $response = $this->client->post(self::ENDPOINT, $tasks, $projectId);
 
         $updated = 0;
 

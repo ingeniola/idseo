@@ -52,7 +52,7 @@ class SearchKeywordIdeas
         // Se manda exactamente una tarea, así que tasks[0] siempre está
         // presente cuando post() devuelve sin lanzar una excepción
         // (DataForSeoClient solo devuelve una respuesta exitosa).
-        $response = $this->client->post(self::ENDPOINT, [$task]);
+        $response = $this->client->post(self::ENDPOINT, [$task], $project->id);
         $task0 = $response->tasks[0];
 
         /** @var array<int, array<string, mixed>> $items */

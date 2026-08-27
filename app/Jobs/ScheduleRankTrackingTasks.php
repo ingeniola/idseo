@@ -71,7 +71,7 @@ class ScheduleRankTrackingTasks implements ShouldQueue
         ])->all();
 
         try {
-            $response = $client->post(self::ENDPOINT, $tasks);
+            $response = $client->post(self::ENDPOINT, $tasks, $project->id);
         } catch (DataForSeoBudgetExceededException $exception) {
             Log::warning('rank_tracking.schedule.budget_exceeded', [
                 'project_id' => $project->id,

@@ -33,7 +33,7 @@ class CompareCompetitorBacklinks
             'target' => $competitorDomain,
             'internal_list_limit' => 10,
             'backlinks_status_type' => 'live',
-        ]]);
+        ]], $project->id);
 
         $result = $response->tasks[0]->result[0] ?? [];
 

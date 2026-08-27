@@ -7,6 +7,7 @@ namespace App\Jobs;
 use App\DataForSeo\DataForSeoClient;
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Models\DataForSeoTask;
+use App\Models\Keyword;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -66,8 +67,10 @@ class ReconcilePendingTasks implements ShouldQueue
             return;
         }
 
+        $projectId = $task->taskable instanceof Keyword ? $task->taskable->project_id : null;
+
         try {
-            $response = $client->get(self::TASK_GET_ENDPOINT.'/'.$taskId);
+            $response = $client->get(self::TASK_GET_ENDPOINT.'/'.$taskId, $projectId);
         } catch (\Throwable $exception) {
             Log::warning('rank_tracking.reconcile.task_get_failed', [
                 'task_id' => $taskId,

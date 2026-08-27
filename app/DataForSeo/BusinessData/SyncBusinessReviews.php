@@ -47,7 +47,7 @@ class SyncBusinessReviews
             'postback_url' => URL::to('/webhooks/dataforseo/reviews').'?token='.$webhookToken,
         ];
 
-        $response = $this->client->post(self::ENDPOINT, [$task]);
+        $response = $this->client->post(self::ENDPOINT, [$task], $project->id);
         $responseTask = $response->tasks[0];
 
         DataForSeoTask::query()->create([

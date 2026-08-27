@@ -13,7 +13,8 @@ use Illuminate\Foundation\Events\Dispatchable;
  * RecordDataForSeoRequestLog (persiste en `dataforseo_requests`, la
  * auditoría "sin excepción" de la sección 3.4 del SPEC) y
  * RecordDataForSeoCost (persiste en `cost_ledger` cuando sí hubo
- * status_code parseable).
+ * status_code parseable, resolviendo client_id a partir de
+ * `$projectId`).
  */
 final class DataForSeoRequestCompleted
 {
@@ -26,5 +27,6 @@ final class DataForSeoRequestCompleted
         public readonly int $durationMs,
         public readonly ?int $apiStatusCode,
         public readonly ?float $cost,
+        public readonly ?int $projectId = null,
     ) {}
 }

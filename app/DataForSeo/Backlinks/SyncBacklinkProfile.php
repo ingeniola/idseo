@@ -69,7 +69,7 @@ class SyncBacklinkProfile
             'target' => $domain,
             'internal_list_limit' => 10,
             'backlinks_status_type' => 'live',
-        ]]);
+        ]], $project->id);
 
         $result = $response->tasks[0]->result[0] ?? null;
 
@@ -99,7 +99,7 @@ class SyncBacklinkProfile
         $response = $this->client->post(self::REFERRING_DOMAINS_ENDPOINT, [[
             'target' => $domain,
             'limit' => self::LIST_LIMIT,
-        ]]);
+        ]], $project->id);
 
         $items = $response->tasks[0]->result[0]['items'] ?? [];
 
@@ -132,7 +132,7 @@ class SyncBacklinkProfile
         $response = $this->client->post(self::BACKLINKS_ENDPOINT, [[
             'target' => $domain,
             'limit' => self::LIST_LIMIT,
-        ]]);
+        ]], $project->id);
 
         $items = $response->tasks[0]->result[0]['items'] ?? [];
 

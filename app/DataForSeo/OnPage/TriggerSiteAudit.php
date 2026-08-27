@@ -52,7 +52,7 @@ class TriggerSiteAudit
             'postback_url' => URL::to('/webhooks/dataforseo/onpage').'?token='.$webhookToken,
         ];
 
-        $response = $this->client->post(self::ENDPOINT, [$task]);
+        $response = $this->client->post(self::ENDPOINT, [$task], $project->id);
         $responseTask = $response->tasks[0];
 
         $audit = SiteAudit::query()->create([

@@ -6,6 +6,7 @@ use App\DataForSeo\CostControl\CircuitBreaker;
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\OnPage\TriggerSiteAudit;
+use App\Models\CostLedger;
 use App\Models\DataForSeoTask;
 use App\Models\Project;
 use App\Models\SiteAudit;
@@ -60,6 +61,20 @@ test('crea el site audit y la tarea polimorfica al postear on_page/task_post', f
         ->and($dataForSeoTask->taskable_type)->toBe(SiteAudit::class)
         ->and($dataForSeoTask->taskable_id)->toBe($audit->id)
         ->and($dataForSeoTask->endpoint)->toBe('on_page/task_post');
+});
+
+test('la llamada a task_post queda atribuida al cliente y proyecto en cost_ledger', function () {
+    $project = Project::factory()->create(['domain' => 'ejemplo.com']);
+
+    Http::fake([
+        '*/on_page/task_post' => Http::response(onPageTaskPostResponse(), 200),
+    ]);
+
+    app(TriggerSiteAudit::class)->execute($project, 50);
+
+    $entry = CostLedger::query()->where('project_id', $project->id)->first();
+    expect($entry)->not->toBeNull()
+        ->and($entry->client_id)->toBe($project->client_id);
 });
 
 test('marca el audit como failed si dataforseo rechaza la tarea', function () {

@@ -68,14 +68,14 @@ class ProcessOnPageAuditPostback implements ShouldQueue
             return;
         }
 
-        $summaryResponse = $client->get(self::SUMMARY_ENDPOINT.$task->task_id);
+        $summaryResponse = $client->get(self::SUMMARY_ENDPOINT.$task->task_id, $audit->project_id);
         $summaryTask = $summaryResponse->tasks[0];
         $summaryResult = $summaryTask->result[0] ?? null;
 
         $pagesResponse = $client->post(self::PAGES_ENDPOINT, [[
             'id' => $task->task_id,
             'limit' => (int) config('dataforseo.onpage_pages_fetch_limit'),
-        ]]);
+        ]], $audit->project_id);
         $items = $pagesResponse->tasks[0]->result[0]['items'] ?? [];
 
         foreach ((is_array($items) ? $items : []) as $item) {

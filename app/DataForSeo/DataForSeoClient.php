@@ -24,6 +24,16 @@ use Throwable;
  * excepciones tipadas. No sabe nada de endpoints específicos: eso vive
  * en clases "por servicio" de fases posteriores, que reciben esta clase
  * inyectada y le piden post()/get().
+ *
+ * `$projectId` (opcional en post()/get()) no es lógica de endpoint: es
+ * pura atribución de costo para `cost_ledger` (sección 3.5 del SPEC).
+ * Va como id plano, no como un Project inyectado, para no acoplar este
+ * cliente al modelo de Eloquent — el listener que escribe en
+ * cost_ledger (RecordDataForSeoCost) es quien resuelve client_id a
+ * partir de él. Quien llama a post()/get() debe pasarlo siempre que
+ * conozca a qué proyecto pertenece la llamada; si abarca varios
+ * proyectos a la vez (o ninguno, como dataforseo:sync-locations) se
+ * deja null en vez de inventar una atribución.
  */
 class DataForSeoClient
 {
@@ -44,7 +54,7 @@ class DataForSeoClient
     /**
      * @param  array<int, array<string, mixed>>  $tasks
      */
-    public function post(string $endpoint, array $tasks): DataForSeoResponseData
+    public function post(string $endpoint, array $tasks, ?int $projectId = null): DataForSeoResponseData
     {
         if (count($tasks) > $this->maxTasksPerRequest) {
             throw new \InvalidArgumentException(sprintf(
@@ -60,24 +70,24 @@ class DataForSeoClient
             );
         }
 
-        return $this->send('POST', $endpoint, $tasks);
+        return $this->send('POST', $endpoint, $projectId, $tasks);
     }
 
-    public function get(string $endpoint): DataForSeoResponseData
+    public function get(string $endpoint, ?int $projectId = null): DataForSeoResponseData
     {
-        return $this->send('GET', $endpoint);
+        return $this->send('GET', $endpoint, $projectId);
     }
 
     /**
      * @param  array<int, array<string, mixed>>|null  $payload
      */
-    private function send(string $method, string $endpoint, ?array $payload = null): DataForSeoResponseData
+    private function send(string $method, string $endpoint, ?int $projectId, ?array $payload = null): DataForSeoResponseData
     {
         $this->throttle();
 
         return retry(
             times: self::RETRY_DELAYS_MS,
-            callback: function () use ($method, $endpoint, $payload) {
+            callback: function () use ($method, $endpoint, $projectId, $payload) {
                 $startedAt = microtime(true);
 
                 try {
@@ -94,24 +104,24 @@ class DataForSeoClient
                         'message' => $exception->getMessage(),
                     ]);
 
-                    $this->record($method, $endpoint, null, $durationMs, null, null);
+                    $this->record($method, $endpoint, $projectId, null, $durationMs, null, null);
 
                     throw $exception;
                 }
 
                 $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
 
-                return $this->handleResponse($method, $endpoint, $response, $durationMs);
+                return $this->handleResponse($method, $endpoint, $projectId, $response, $durationMs);
             },
             when: fn (Throwable $exception) => $exception instanceof ConnectionException
                 || $exception instanceof DataForSeoTransientException,
         );
     }
 
-    private function handleResponse(string $method, string $endpoint, Response $response, int $durationMs): DataForSeoResponseData
+    private function handleResponse(string $method, string $endpoint, ?int $projectId, Response $response, int $durationMs): DataForSeoResponseData
     {
         if ($response->status() === 429 || $response->serverError()) {
-            $this->record($method, $endpoint, $response->status(), $durationMs, null, null);
+            $this->record($method, $endpoint, $projectId, $response->status(), $durationMs, null, null);
 
             throw new DataForSeoTransientException(
                 "DataForSEO respondió HTTP {$response->status()} en {$endpoint}.",
@@ -120,7 +130,7 @@ class DataForSeoClient
         }
 
         if ($response->clientError()) {
-            $this->record($method, $endpoint, $response->status(), $durationMs, null, null);
+            $this->record($method, $endpoint, $projectId, $response->status(), $durationMs, null, null);
 
             throw new DataForSeoPermanentException(
                 "DataForSEO respondió HTTP {$response->status()} en {$endpoint}.",
@@ -130,7 +140,7 @@ class DataForSeoClient
 
         $data = DataForSeoResponseData::from($response->json() ?? []);
 
-        $this->record($method, $endpoint, $response->status(), $durationMs, $data->statusCode, $data->cost);
+        $this->record($method, $endpoint, $projectId, $response->status(), $durationMs, $data->statusCode, $data->cost);
 
         if ($data->isSuccessful()) {
             return $data;
@@ -154,6 +164,7 @@ class DataForSeoClient
     private function record(
         string $method,
         string $endpoint,
+        ?int $projectId,
         ?int $httpStatus,
         int $durationMs,
         ?int $apiStatusCode,
@@ -162,13 +173,22 @@ class DataForSeoClient
         Log::info('dataforseo.request', [
             'method' => $method,
             'endpoint' => $endpoint,
+            'project_id' => $projectId,
             'http_status' => $httpStatus,
             'duration_ms' => $durationMs,
             'api_status_code' => $apiStatusCode,
             'cost' => $cost,
         ]);
 
-        DataForSeoRequestCompleted::dispatch($method, $endpoint, $httpStatus, $durationMs, $apiStatusCode, $cost);
+        DataForSeoRequestCompleted::dispatch(
+            method: $method,
+            endpoint: $endpoint,
+            httpStatus: $httpStatus,
+            durationMs: $durationMs,
+            apiStatusCode: $apiStatusCode,
+            cost: $cost,
+            projectId: $projectId,
+        );
     }
 
     private function throttle(): void
