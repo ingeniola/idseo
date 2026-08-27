@@ -395,9 +395,70 @@ aparecen activos.
 
 ## 10. Chrome/Node para Browsershot (reportes PDF)
 
-Solo si vas a usar la generación de reportes: **WHM → Node.js
-Selector**, más Chrome/Chromium headless a nivel de sistema, y apunta
-`BROWSERSHOT_CHROME_PATH` en `.env` al binario.
+Solo si vas a usar la generación de reportes. Este proyecto instala
+`puppeteer-core` (no `puppeteer`) — ver `config/browsershot.php` y
+`scripts/setup-puppeteer-shim.cjs` — para no depender de que cada
+`npm install` descargue su propio Chromium; en su lugar usa un
+Chrome/Chromium ya instalado en el servidor, apuntado por
+`BROWSERSHOT_CHROME_PATH`.
+
+**`puppeteer-core@25.x` exige Node.js >=22.12.0.** Si `node -v` te da
+una versión menor, `npm install` va a instalar igual pero con un
+warning `EBADENGINE` — no lo ignores, es un riesgo real de que
+Browsershot falle en producción por una API de Node que no existe en
+la versión vieja.
+
+Como `root`:
+
+```bash
+dnf module list nodejs        # confirma que el stream 22 está disponible
+dnf module reset -y nodejs
+dnf module install -y nodejs:22
+node -v                       # debe dar v22.x.x
+
+dnf install -y chromium
+which chromium-browser        # apunta el binario real, ej. /bin/chromium-browser
+```
+
+Como `ingeniola`, desde `/home/ingeniola/idseo` (confirma con `pwd`
+antes de correr esto — un `cd` seguido de más comandos en el mismo
+bloque a veces no persiste si el `su -` de arriba abrió una sesión
+nueva a medio pegar):
+
+```bash
+cd /home/ingeniola/idseo
+pwd   # debe decir /home/ingeniola/idseo
+
+# puppeteer-core está en devDependencies: un npm install en modo
+# producción lo saltaría, hay que forzar incluir dev deps
+npm install --include=dev
+```
+
+Edita `.env` (confirma con `grep -n "^BROWSERSHOT_CHROME_PATH" .env`
+que de verdad quedó escrito, no solo la línea vacía que trae
+`.env.example`):
+
+```env
+BROWSERSHOT_CHROME_PATH=/bin/chromium-browser
+```
+
+```bash
+php artisan config:cache
+
+# prueba real, no solo que el comando no falle
+php artisan tinker --execute="app(\App\Reports\PdfRenderer::class)->render('<h1>Prueba</h1>', '/tmp/test.pdf'); echo file_exists('/tmp/test.pdf') ? 'OK: '.filesize('/tmp/test.pdf').' bytes' : 'FALLO';"
+file /tmp/test.pdf   # debe decir "PDF document"
+rm -f /tmp/test.pdf
+```
+
+Si algún comando de este paso corrió por accidente como `root`
+(pasa fácil si el bloque se pegó justo después de un `su - ingeniola`
+que no tomó), `node_modules` queda con dueño equivocado y hay que
+corregirlo una vez, como root:
+
+```bash
+chown -R ingeniola:ingeniola /home/ingeniola/idseo/node_modules
+```
 
 ## 11. HTTPS
 
