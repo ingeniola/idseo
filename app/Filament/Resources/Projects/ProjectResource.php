@@ -12,6 +12,7 @@ use App\Filament\Resources\Projects\RelationManagers\BusinessReviewsRelationMana
 use App\Filament\Resources\Projects\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordIdeasRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
+use App\Filament\Resources\Projects\RelationManagers\LlmMentionsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\ReferringDomainsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\ReportsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\SearchConsoleRelationManager;
@@ -70,6 +71,7 @@ class ProjectResource extends Resource
             ReferringDomainsRelationManager::class,
             SiteAuditsRelationManager::class,
             BusinessReviewsRelationManager::class,
+            LlmMentionsRelationManager::class,
         ];
     }
 

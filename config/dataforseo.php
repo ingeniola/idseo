@@ -162,4 +162,19 @@ return [
 
     'business_reviews_default_depth' => (int) env('DATAFORSEO_BUSINESS_REVIEWS_DEFAULT_DEPTH', 20),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Estimación de costo — menciones en LLMs / GEO (Live)
+    |--------------------------------------------------------------------------
+    |
+    | Fase 3, sección 5.4: "Monitoreo de menciones en LLMs (GEO)".
+    | ai_optimization/llm_mentions/search/live, una sola llamada por
+    | búsqueda. Mismo caso que las demás estimaciones Live: sin precio
+    | confirmado en la documentación pública disponible al construir
+    | este módulo.
+    |
+    */
+
+    'llm_mentions_search_live_cost_estimate' => env('DATAFORSEO_LLM_MENTIONS_SEARCH_LIVE_COST_ESTIMATE'),
+
 ];

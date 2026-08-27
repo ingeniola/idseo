@@ -236,4 +236,15 @@ class Project extends Model
     {
         return $this->hasMany(BusinessReview::class);
     }
+
+    /**
+     * Fase 3: monitoreo de menciones en LLMs / GEO (sección 5 del
+     * SPEC).
+     *
+     * @return HasMany<LlmMention, $this>
+     */
+    public function llmMentions(): HasMany
+    {
+        return $this->hasMany(LlmMention::class);
+    }
 }
