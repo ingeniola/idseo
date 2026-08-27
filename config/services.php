@@ -35,4 +35,24 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Google Search Console
+    |--------------------------------------------------------------------------
+    |
+    | Fase 2, "Integración con Google Search Console (OAuth propio,
+    | datos gratis)" — sección 5 del SPEC. App OAuth propia de Ingenio
+    | registrada en Google Cloud Console (no un broker de terceros),
+    | scope de solo lectura (webmasters.readonly). redirect debe
+    | coincidir exactamente con el que está dado de alta en la consola
+    | de Google para esta app.
+    |
+    */
+
+    'google_search_console' => [
+        'client_id' => env('GOOGLE_SEARCH_CONSOLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_SEARCH_CONSOLE_REDIRECT_URI'),
+    ],
+
 ];

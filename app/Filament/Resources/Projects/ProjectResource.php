@@ -11,6 +11,7 @@ use App\Filament\Resources\Projects\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordIdeasRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\ReportsRelationManager;
+use App\Filament\Resources\Projects\RelationManagers\SearchConsoleRelationManager;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
 use App\Filament\Resources\Projects\Tables\ProjectsTable;
 use App\Models\Project;
@@ -60,6 +61,7 @@ class ProjectResource extends Resource
             ReportsRelationManager::class,
             CompetitorsRelationManager::class,
             KeywordIdeasRelationManager::class,
+            SearchConsoleRelationManager::class,
         ];
     }
 

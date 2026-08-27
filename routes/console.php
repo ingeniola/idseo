@@ -6,6 +6,7 @@ use App\Jobs\DetectRankingAlerts;
 use App\Jobs\GenerateScheduledReports;
 use App\Jobs\ReconcilePendingTasks;
 use App\Jobs\ScheduleRankTrackingTasks;
+use App\Jobs\SyncSearchConsoleData;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -26,6 +27,10 @@ Schedule::job(new CalculateSerpCompetitors)->dailyAt('06:15');
 // después de CalculateSerpCompetitors para no competir por recursos a
 // la misma hora exacta.
 Schedule::job(new DetectRankingAlerts)->dailyAt('06:30');
+// Fase 2: Search Console. 06:45, después de las alertas — no depende
+// de ningún otro job "derivado diario", solo comparte el bloque
+// horario. Costo cero (datos gratis).
+Schedule::job(new SyncSearchConsoleData)->dailyAt('06:45');
 Schedule::job(new GenerateScheduledReports)->monthlyOn(1, '07:00');
 
 /**

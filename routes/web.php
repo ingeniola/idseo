@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\ConnectSearchConsoleController;
 use App\Http\Controllers\DataForSeoPostbackController;
 use App\Http\Controllers\DownloadReportController;
 use App\Http\Controllers\PortalLogoutController;
+use App\Http\Controllers\SearchConsoleCallbackController;
 use App\Http\Middleware\EnsureUserIsClient;
+use App\Http\Middleware\EnsureUserIsInternal;
 use App\Livewire\Portal\Login as PortalLogin;
 use App\Livewire\Portal\ProjectList as PortalProjectList;
 use App\Livewire\Portal\ProjectShow as PortalProjectShow;
@@ -19,6 +22,27 @@ Route::post('/webhooks/dataforseo/{type}', DataForSeoPostbackController::class)
 Route::get('/reports/{report}/download', DownloadReportController::class)
     ->middleware('auth')
     ->name('reports.download');
+
+/**
+ * Google Search Console (Fase 2, sección 5 del SPEC): rutas planas de
+ * Laravel, no recursos de Filament, porque OAuth necesita
+ * redirecciones de página completa (fuera del ciclo de vida de
+ * Livewire). EnsureUserIsInternal es la contraparte de
+ * EnsureUserIsClient del portal: sin ella, un usuario `client`
+ * autenticado podría alcanzar estas rutas igual que cualquier otra
+ * ruta con solo `auth`. gsc/callback NO lleva {project} en la URL:
+ * tiene que ser una redirect_uri fija, idéntica a la registrada en
+ * Google Cloud Console — SearchConsoleCallbackController recupera el
+ * proyecto desde el `state` encriptado. Desconectar NO vive aquí:
+ * no necesita salir a Google, así que es una Action normal de Filament
+ * dentro de SearchConsoleRelationManager, no una ruta aparte.
+ */
+Route::middleware(['auth', EnsureUserIsInternal::class])->group(function () {
+    Route::get('/admin/projects/{project}/gsc/connect', ConnectSearchConsoleController::class)
+        ->name('gsc.connect');
+    Route::get('/admin/gsc/callback', SearchConsoleCallbackController::class)
+        ->name('gsc.callback');
+});
 
 /**
  * Portal de cliente (Fase 1, paso 11 del SPEC): plano Livewire, sin

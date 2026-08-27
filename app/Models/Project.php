@@ -152,4 +152,23 @@ class Project extends Model
     {
         return $this->hasMany(RankingAlert::class);
     }
+
+    /**
+     * Fase 2: integración con Google Search Console (sección 5 del
+     * SPEC). Una sola conexión por proyecto (unique en project_id).
+     *
+     * @return HasOne<SearchConsoleConnection, $this>
+     */
+    public function searchConsoleConnection(): HasOne
+    {
+        return $this->hasOne(SearchConsoleConnection::class);
+    }
+
+    /**
+     * @return HasMany<SearchConsoleMetric, $this>
+     */
+    public function searchConsoleMetrics(): HasMany
+    {
+        return $this->hasMany(SearchConsoleMetric::class);
+    }
 }
