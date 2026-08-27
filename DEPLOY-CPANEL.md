@@ -1,77 +1,93 @@
 # Despliegue en WHM/cPanel — idseo.ingenio.la
 
-Servidor dedicado propio, acceso root vía WHM, que también aloja
-cuentas cPanel de clientes. La sección 12 del SPEC pide un servidor
-completamente separado; al quedarte en el mismo servidor, esto mitiga
-el riesgo compartido con las herramientas que sí tienes disponibles
-por ser dueño del server (cuenta cPanel propia y aislada, límites de
-recursos LVE, respaldo a almacenamiento externo). Sigue siendo el
-mismo kernel/red que los sitios de clientes — no es equivalente a un
-VPS separado, pero es razonable con estas mitigaciones.
+Servidor dedicado propio, acceso root vía WHM. `idseo.ingenio.la` se
+instala como **subdominio dentro de la cuenta cPanel existente
+`ingeniola`** (la misma que ya aloja `agencia.ingenio.la`) — no una
+cuenta nueva. Como `agencia.ingenio.la` es propiedad de ustedes y no
+de un cliente externo, compartir cuenta con ella es razonable; la
+preocupación de la sección 12 del SPEC ("servidor completamente
+separado") es sobre todo con sitios de **clientes** de terceros, que
+siguen en otras cuentas cPanel de este mismo servidor físico — para
+esos, la mitigación sigue siendo LVE Manager a nivel de cuenta (ver
+abajo) y no depende de esto.
 
-Cuenta cPanel: `idseo` · Dominio: `idseo.ingenio.la` · Ruta:
-`/home/idseo/idseo`.
+Cuenta cPanel: `ingeniola` · Subdominio: `idseo.ingenio.la` · Ruta de
+la app: `/home/ingeniola/idseo` · Document root del subdominio:
+`/home/ingeniola/idseo/public`.
 
 ## Requisitos del servidor
 
 No es una máquina nueva — es lo que necesita **existir además de** lo
 que WHM/cPanel ya trae, en el servidor que ya tienes.
 
-**Hardware** (sobre lo que ya usan WHM + los sitios de clientes):
-- **RAM**: +2 GB libres de margen como mínimo (Redis + Horizon +
-  el pool PHP-FPM de esta cuenta). Si el servidor ya anda ajustado de
-  memoria con los sitios actuales, súmale RAM antes de instalar esto,
-  no lo comparas después de que empiece a fallar.
+**Hardware** (sobre lo que ya usan WHM + `agencia.ingenio.la` + los
+sitios de clientes en otras cuentas):
+- **RAM**: +2 GB libres de margen como mínimo (Redis + Horizon + el
+  pool PHP-FPM de este subdominio). Si el servidor ya anda ajustado de
+  memoria, súmale RAM antes de instalar esto, no después de que
+  empiece a fallar.
 - **CPU**: 2 vCPU libres razonable; los crawls de auditoría on-page y
-  las llamadas Live pueden generar ráfagas de uso — de ahí la
-  recomendación de LVE Manager más abajo, para que esas ráfagas no le
-  quiten CPU a un sitio de cliente.
+  las llamadas Live pueden generar ráfagas de uso.
 - **Disco**: SSD, 20 GB libres para empezar. La tabla `rankings` y los
   snapshots de SERP crecen rápido con el uso (riesgo #3 del SPEC) —
-  vigilar esto no es un paso único de instalación, es continuo.
+  vigilar esto es continuo, no un paso único de instalación.
 
 **Software** (lo que hay que agregar al servidor; todo lo demás ya
 viene con WHM):
 - **PHP 8.3 o 8.4** con extensiones: `pdo_mysql`, `redis`, `bcmath`,
   `gd`, `intl`, `zip`, `mbstring`, `xml`, `curl`, `sodium`, `fileinfo`
   — todas estándar en EA4, se activan desde WHM, no se instalan
-  aparte.
+  aparte. cPanel permite fijar la versión de PHP por subdominio, así
+  que `idseo.ingenio.la` puede usar 8.3/8.4 aunque
+  `agencia.ingenio.la` use otra.
 - **MySQL/MariaDB** — ya viene con WHM.
-- **Redis** — no viene con cPanel, se instala aparte (paso 5).
-- **Supervisor** — no viene con cPanel, se instala aparte (paso 10),
+- **Redis** — no viene con cPanel, se instala aparte (paso 4).
+- **Supervisor** — no viene con cPanel, se instala aparte (paso 9),
   necesario para mantener Horizon corriendo 24/7.
 - **Composer** — muchos WHM ya lo traen en `Software → Composer` /
   `/opt/cpanel/composer/bin/composer`; si no, se instala manual.
 - **Git** — normalmente ya está.
 - **Node.js + Chrome/Chromium headless** — solo si vas a usar la
-  generación de reportes en PDF (Browsershot, paso 11).
-- **AutoSSL** — ya viene con cPanel, solo hay que activarlo (paso 12).
+  generación de reportes en PDF (Browsershot, paso 10).
+- **AutoSSL** — ya viene con cPanel, solo hay que activarlo (paso 11).
 
-## 0. Crear y aislar la cuenta
+## 0. Límite de recursos de la cuenta (si aplica)
 
-1. **WHM → Create a New Account**: dominio `idseo.ingenio.la`,
-   usuario `idseo`. Cuenta dedicada solo a esto — nunca reutilices la
-   de un cliente. Te da un usuario Linux propio (`/home/idseo`) y, con
-   PHP-FPM (default en EA4), un pool PHP-FPM propio.
-2. Si tienes **CloudLinux con LVE Manager**: **WHM → LVE Manager** →
-   ponle límites explícitos de CPU/memoria a la cuenta `idseo`. Es lo
-   que evita que un crawl grande le robe recursos a un sitio de
-   cliente en la misma caja física.
+Si tienes **CloudLinux con LVE Manager**: **WHM → LVE Manager** →
+revisa el límite de CPU/memoria de la cuenta `ingeniola`. Un crawl de
+auditoría on-page grande corriendo bajo `idseo.ingenio.la` consume
+recursos de la misma cuenta que `agencia.ingenio.la` — si el límite
+actual de la cuenta es justo para el sitio de agencia solo, súbelo
+antes de meter esta app, para que un crawl pesado no le tumbe
+disponibilidad al sitio de agencia.
 
-## 1. PHP
+## 1. Crear el subdominio
 
-- **WHM → MultiPHP Manager**: asigna PHP 8.3 u 8.4 al dominio `idseo.ingenio.la`.
-- **WHM → MultiPHP INI Editor** (o `Select PHP Version` dentro del
-  cPanel de la cuenta) → pestaña de extensiones: activa `redis` y
-  confirma que el resto de la lista de arriba está activo.
-- Sube `memory_limit` a al menos 256M y `max_execution_time` a 120.
+**cPanel (de la cuenta `ingeniola`) → Domains → Create A New Domain**:
 
-## 2. Código
+- **Domain**: `idseo.ingenio.la`
+- **Document Root**: cPanel va a proponer algo como
+  `idseo.ingenio.la` dentro de `public_html/` — **cámbialo** a
+  `idseo/public` (o créalo así y ajusta en el paso 3 si no te deja
+  escribir una ruta fuera de `public_html/` en este formulario).
 
-Por SSH, como el usuario de la cuenta (nunca como root para esto):
+## 2. PHP
+
+- **WHM → MultiPHP Manager**: asigna PHP 8.3 u 8.4 específicamente al
+  subdominio `idseo.ingenio.la` (no cambia lo que ya usa
+  `agencia.ingenio.la`).
+- **WHM → MultiPHP INI Editor** → selecciona `idseo.ingenio.la` →
+  pestaña de extensiones: activa `redis` y confirma el resto de la
+  lista de arriba.
+- Sube `memory_limit` a al menos 256M y `max_execution_time` a 120
+  para ese subdominio.
+
+## 3. Código
+
+Por SSH, como el usuario `ingeniola` (nunca como root para esto):
 
 ```bash
-su - idseo
+su - ingeniola
 git clone <url-del-repo> idseo
 cd idseo
 git checkout main   # o la rama que vayas a desplegar
@@ -80,7 +96,7 @@ composer install --no-dev --optimize-autoloader
 ```
 
 Si `composer`/`php` del sistema no resuelven a la versión 8.3/8.4 que
-activaste para la cuenta, usa el binario explícito de EA4:
+activaste para el subdominio, usa el binario explícito de EA4:
 
 ```bash
 /opt/cpanel/ea-php84/root/usr/bin/php /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
@@ -88,34 +104,33 @@ activaste para la cuenta, usa el binario explícito de EA4:
 
 (Ajusta `ea-php84` a la versión real.)
 
-## 3. Document root apuntando a `public/`, no a `public_html/`
-
-Laravel sirve desde `public/`; cPanel sirve desde `public_html/` por
-defecto — **nunca** dejes la app suelta dentro de `public_html/`
-(expondría `.env`, `app/`, el código fuente completo).
-
-**WHM → Domains → idseo.ingenio.la → Document Root** → apúntalo a
-`/home/idseo/idseo/public`. (O `cPanel → Domains → Manage → Document
-Root` desde dentro de la cuenta si WHM no te deja hacerlo directo.)
+Confirma que el document root del subdominio (paso 1) terminó
+apuntando a `/home/ingeniola/idseo/public` y no a
+`/home/ingeniola/idseo` ni a `public_html/idseo` — **nunca** dejes la
+app completa como document root, expondría `.env`, `app/`, el código
+fuente. Si el asistente de cPanel no te dejó escribir esa ruta
+directo: **WHM → Domains → idseo.ingenio.la → Document Root** te deja
+corregirla después de creado el subdominio.
 
 ## 4. Base de datos
 
 **WHM → MySQL Database Wizard** (o `MySQL® Databases` dentro del
-cPanel de la cuenta): crea la base, un usuario, y dale todos los
-privilegios sobre esa base. cPanel prefija los nombres con el usuario
-de la cuenta — normalmente quedan como `idseo_idseo` (base) e
-`idseo_idseo` (usuario), o similar; usa lo que WHM te muestre.
+cPanel de la cuenta `ingeniola`): crea una base y un usuario
+*específicos para esta app* — no reutilices la base de
+`agencia.ingenio.la`. cPanel prefija los nombres con el usuario de la
+cuenta, normalmente quedan como `ingeniola_idseo` (base) e
+`ingeniola_idseo` (usuario); usa lo que WHM te muestre.
 
 ## 5. Redis
 
 ```bash
-# AlmaLinux/CloudLinux (lo más común en WHM):
 dnf install -y redis
 systemctl enable --now redis
 ```
 
-Un solo Redis del sistema es suficiente. Déjalo escuchando solo en
-`127.0.0.1` — nunca expuesto a la red pública.
+Un solo Redis del sistema es suficiente (esta es la única app que lo
+usa). Déjalo escuchando solo en `127.0.0.1` — nunca expuesto a la red
+pública.
 
 ## 6. `.env`
 
@@ -132,8 +147,8 @@ APP_DEBUG=false
 APP_URL=https://idseo.ingenio.la
 
 DB_HOST=localhost
-DB_DATABASE=idseo_idseo
-DB_USERNAME=idseo_idseo
+DB_DATABASE=ingeniola_idseo
+DB_USERNAME=ingeniola_idseo
 DB_PASSWORD=<la real>
 
 SESSION_DRIVER=redis
@@ -145,9 +160,9 @@ DATAFORSEO_LOGIN=<tu login real>
 DATAFORSEO_PASSWORD=<tu password real>
 DATAFORSEO_WEBHOOK_TOKEN=<genera uno largo y random, ej: openssl rand -hex 32>
 
-# Sección 9 del SPEC: nunca "local" en producción, sobre todo aquí,
-# que comparte disco físico con los sitios de clientes. Usa S3,
-# Wasabi, Backblaze B2, o similar.
+# Sección 9 del SPEC: nunca "local" en producción — este servidor
+# también aloja sitios de clientes en otras cuentas. Usa S3, Wasabi,
+# Backblaze B2, o similar.
 BACKUP_DISK=s3
 AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
@@ -183,22 +198,27 @@ php artisan route:cache
 php artisan view:cache
 
 chmod -R 775 storage bootstrap/cache
-chown -R idseo:idseo storage bootstrap/cache
+chown -R ingeniola:ingeniola storage bootstrap/cache
 ```
 
-## 9. Scheduler (cron)
+## 9. Scheduler (cron) y Horizon vía Supervisor
 
-**WHM → Cron Jobs** (o `crontab -e` como el usuario `idseo`):
+**Scheduler** — **WHM → Cron Jobs** (o `crontab -e` como `ingeniola`):
 
 ```
-* * * * * cd /home/idseo/idseo && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/ingeniola/idseo && php artisan schedule:run >> /dev/null 2>&1
 ```
+
+Si `agencia.ingenio.la` u otra app de la cuenta ya tiene su propio
+cron, agrega esta línea al mismo crontab del usuario `ingeniola` —
+no hay conflicto, cada línea es independiente.
 
 Verifica con `php artisan schedule:list` — todas las tareas ya traen
 `->sentryMonitor()`, así que si el cron deja de correr, Sentry Crons
 avisa; no dependas solo de mirarlo a ojo.
 
-## 10. Cola persistente (Horizon) vía Supervisor
+**Horizon** (cola persistente, necesita un proceso 24/7 — cPanel no lo
+hace por sí solo):
 
 ```bash
 dnf install -y supervisor
@@ -210,12 +230,12 @@ systemctl enable --now supervisord
 ```ini
 [program:idseo-horizon]
 process_name=%(program_name)s
-command=php /home/idseo/idseo/artisan horizon
+command=php /home/ingeniola/idseo/artisan horizon
 autostart=true
 autorestart=true
-user=idseo
+user=ingeniola
 redirect_stderr=true
-stdout_logfile=/home/idseo/idseo/storage/logs/horizon.log
+stdout_logfile=/home/ingeniola/idseo/storage/logs/horizon.log
 stopwaitsecs=3600
 ```
 
@@ -228,19 +248,21 @@ supervisorctl start idseo-horizon
 Verifica en `https://idseo.ingenio.la/admin/horizon` que los workers
 aparecen activos.
 
-## 11. Chrome/Node para Browsershot (reportes PDF)
+## 10. Chrome/Node para Browsershot (reportes PDF)
 
 Solo si vas a usar la generación de reportes: **WHM → Node.js
 Selector**, más Chrome/Chromium headless a nivel de sistema, y apunta
 `BROWSERSHOT_CHROME_PATH` en `.env` al binario.
 
-## 12. HTTPS
+## 11. HTTPS
 
-**WHM → SSL/TLS Status** o **AutoSSL** → actívalo para
-`idseo.ingenio.la`. Obligatorio por sección 12 del SPEC, y necesario
-para que el webhook de postback (paso 13) sea alcanzable.
+**WHM → SSL/TLS Status** o **AutoSSL** → actívalo específicamente para
+`idseo.ingenio.la` (un subdominio nuevo necesita su propio
+certificado, no hereda el de `agencia.ingenio.la` automáticamente en
+todos los casos — confírmalo). Obligatorio por sección 12 del SPEC, y
+necesario para que el webhook de postback (paso 12) sea alcanzable.
 
-## 13. Verificar que el webhook es alcanzable desde internet
+## 12. Verificar que el webhook es alcanzable desde internet
 
 DataForSEO llama de vuelta a
 `https://idseo.ingenio.la/webhooks/dataforseo/{serp|onpage|reviews}?token=...`
@@ -252,9 +274,10 @@ atoradas en `pending` (el job `ReconcilePendingTasks` las recupera
 cada hora, pero eso es un síntoma de que el webhook no sirve, no una
 solución).
 
-## 14. Prueba de humo final
+## 13. Prueba de humo final
 
 - [ ] `https://idseo.ingenio.la/admin/login` carga y el login funciona.
+- [ ] `agencia.ingenio.la` sigue funcionando normal (nada se rompió al compartir cuenta).
 - [ ] Horizon (`/admin/horizon` o `php artisan horizon:status`) muestra el worker corriendo.
 - [ ] `php artisan schedule:list` muestra las tareas con su próxima hora.
 - [ ] Un crawl de auditoría on-page de prueba en un proyecto real termina y aparece en la pestaña.
