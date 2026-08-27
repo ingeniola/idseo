@@ -144,4 +144,22 @@ return [
 
     'onpage_pages_fetch_limit' => (int) env('DATAFORSEO_ONPAGE_PAGES_FETCH_LIMIT', 1000),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Reseñas de Google Business Profile (Fase 3, sección 5 del SPEC)
+    |--------------------------------------------------------------------------
+    |
+    | business_data/google/reviews/task_post cobra por cada 10 reseñas
+    | del `depth` solicitado (confirmado por búsqueda cruzada), no por
+    | llamada fija — igual que la auditoría on-page, la estimación es
+    | "por cada 10 reseñas". Sin precio confirmado en la documentación
+    | pública disponible al construir este módulo — llenar con el
+    | precio real de la cuenta antes de producción.
+    |
+    */
+
+    'business_reviews_cost_per_10_estimate' => env('DATAFORSEO_BUSINESS_REVIEWS_COST_PER_10_ESTIMATE'),
+
+    'business_reviews_default_depth' => (int) env('DATAFORSEO_BUSINESS_REVIEWS_DEFAULT_DEPTH', 20),
+
 ];

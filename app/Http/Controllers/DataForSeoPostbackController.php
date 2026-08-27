@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
+use App\Jobs\ProcessBusinessReviewsPostback;
 use App\Jobs\ProcessDataForSeoPostback;
 use App\Jobs\ProcessOnPageAuditPostback;
 use App\Models\DataForSeoTask;
@@ -37,6 +38,7 @@ class DataForSeoPostbackController extends Controller
     private const JOBS = [
         'serp' => ProcessDataForSeoPostback::class,
         'onpage' => ProcessOnPageAuditPostback::class,
+        'reviews' => ProcessBusinessReviewsPostback::class,
     ];
 
     public function __invoke(Request $request, string $type): JsonResponse

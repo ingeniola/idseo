@@ -21,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $client_id
  * @property string $name
  * @property string $domain
+ * @property string|null $google_business_place_id
  * @property TargetType $target_type
  * @property int $default_location_code
  * @property string $default_language_code
@@ -37,6 +38,7 @@ class Project extends Model
         'client_id',
         'name',
         'domain',
+        'google_business_place_id',
         'target_type',
         'default_location_code',
         'default_language_code',
@@ -222,5 +224,16 @@ class Project extends Model
     public function siteAudits(): HasMany
     {
         return $this->hasMany(SiteAudit::class);
+    }
+
+    /**
+     * Fase 3: monitoreo de reseñas y Google Business Profile (sección
+     * 5 del SPEC).
+     *
+     * @return HasMany<BusinessReview, $this>
+     */
+    public function businessReviews(): HasMany
+    {
+        return $this->hasMany(BusinessReview::class);
     }
 }

@@ -11,6 +11,8 @@ return [
         'client_id' => 'Cliente',
         'name' => 'Nombre',
         'domain' => 'Dominio',
+        'google_business_place_id' => 'Place ID de Google Business',
+        'google_business_place_id_help' => 'Identificador de la ficha en Google Maps (Place ID). Necesario para sincronizar reseñas de Google Business Profile.',
         'target_type' => 'Tipo de objetivo',
         'default_location_code' => 'Ubicación por defecto',
         'default_language_code' => 'Idioma por defecto',

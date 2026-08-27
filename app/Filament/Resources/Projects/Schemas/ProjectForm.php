@@ -34,6 +34,10 @@ class ProjectForm
                     ->label(__('projects.fields.domain'))
                     ->required()
                     ->maxLength(255),
+                TextInput::make('google_business_place_id')
+                    ->label(__('projects.fields.google_business_place_id'))
+                    ->helperText(__('projects.fields.google_business_place_id_help'))
+                    ->maxLength(255),
                 Select::make('target_type')
                     ->label(__('projects.fields.target_type'))
                     ->options(TargetType::class)

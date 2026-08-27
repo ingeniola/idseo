@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
+use App\Jobs\ProcessBusinessReviewsPostback;
 use App\Jobs\ProcessDataForSeoPostback;
 use App\Jobs\ProcessOnPageAuditPostback;
 use App\Models\DataForSeoTask;
@@ -115,4 +116,21 @@ test('el tipo onpage despacha ProcessOnPageAuditPostback en vez de ProcessDataFo
     $response->assertOk()->assertJson(['status' => 'accepted']);
     Bus::assertDispatched(ProcessOnPageAuditPostback::class, fn (ProcessOnPageAuditPostback $job) => $job->dataForSeoTaskId === $task->id);
     Bus::assertNotDispatched(ProcessDataForSeoPostback::class);
+});
+
+test('el tipo reviews despacha ProcessBusinessReviewsPostback', function () {
+    Bus::fake();
+
+    $project = Project::factory()->create();
+    $task = DataForSeoTask::factory()->create([
+        'task_id' => 'task-reviews-postback',
+        'taskable_type' => Project::class,
+        'taskable_id' => $project->id,
+        'status' => DataForSeoTaskStatus::Pending,
+    ]);
+
+    $response = $this->call('POST', postbackUrl(type: 'reviews'), content: json_encode(['tasks' => [['id' => 'task-reviews-postback', 'status_code' => 20000]]]));
+
+    $response->assertOk()->assertJson(['status' => 'accepted']);
+    Bus::assertDispatched(ProcessBusinessReviewsPostback::class, fn (ProcessBusinessReviewsPostback $job) => $job->dataForSeoTaskId === $task->id);
 });

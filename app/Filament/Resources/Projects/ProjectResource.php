@@ -8,6 +8,7 @@ use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
 use App\Filament\Resources\Projects\RelationManagers\BacklinksRelationManager;
+use App\Filament\Resources\Projects\RelationManagers\BusinessReviewsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordIdeasRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
@@ -68,6 +69,7 @@ class ProjectResource extends Resource
             BacklinksRelationManager::class,
             ReferringDomainsRelationManager::class,
             SiteAuditsRelationManager::class,
+            BusinessReviewsRelationManager::class,
         ];
     }
 
