@@ -213,4 +213,14 @@ class Project extends Model
     {
         return $this->hasMany(ReferringDomain::class);
     }
+
+    /**
+     * Fase 3: auditoría técnica on-page (sección 5 del SPEC).
+     *
+     * @return HasMany<SiteAudit, $this>
+     */
+    public function siteAudits(): HasMany
+    {
+        return $this->hasMany(SiteAudit::class);
+    }
 }

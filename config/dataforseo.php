@@ -107,4 +107,41 @@ return [
 
     'backlink_comparison_live_cost_estimate' => env('DATAFORSEO_BACKLINK_COMPARISON_LIVE_COST_ESTIMATE'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Auditoría técnica on-page (Fase 3, sección 5 del SPEC)
+    |--------------------------------------------------------------------------
+    |
+    | on_page/task_post es modo Standard, no Live, pero SÍ es una acción
+    | paga disparada a demanda (no hay mandato del SPEC de auditar
+    | periódicamente), así que igual necesita estimación de costo en la
+    | UI (sección 3.5). Se cobra por página crawleada, no por llamada
+    | fija — a diferencia de las estimaciones "por llamada" de arriba,
+    | esta es "por página" y la UI debe mostrarlo como tal. Sin precio
+    | confirmado en la documentación pública disponible al construir
+    | este módulo — llenar con el precio real de la cuenta antes de
+    | producción.
+    |
+    */
+
+    'onpage_audit_cost_per_page_estimate' => env('DATAFORSEO_ONPAGE_AUDIT_COST_PER_PAGE_ESTIMATE'),
+
+    'onpage_audit_default_max_crawl_pages' => (int) env('DATAFORSEO_ONPAGE_AUDIT_DEFAULT_MAX_CRAWL_PAGES', 100),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Límite de páginas al pedir on_page/pages
+    |--------------------------------------------------------------------------
+    |
+    | ProcessOnPageAuditPostback pide los resultados por página en una
+    | sola llamada con este límite (sección 3.3: verificar vía llamada
+    | propia, no confiar en el postback). No se encontró el máximo real
+    | que acepta el endpoint en la documentación pública disponible —
+    | 1000 es un valor conservador, mayor que max_crawl_pages por
+    | defecto, para no truncar auditorías normales.
+    |
+    */
+
+    'onpage_pages_fetch_limit' => (int) env('DATAFORSEO_ONPAGE_PAGES_FETCH_LIMIT', 1000),
+
 ];

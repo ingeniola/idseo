@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Jobs\ProcessDataForSeoPostback;
+use App\Jobs\ProcessOnPageAuditPostback;
 use App\Models\DataForSeoTask;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,13 +22,35 @@ use Illuminate\Support\Facades\Log;
  * DataForSEO manda el resultado comprimido en gzip (confirmado en la
  * documentación pública), así que hay que descomprimir el body crudo
  * antes de decodificar JSON — Laravel no lo hace solo.
+ *
+ * `$type` (el segmento de la URL, ej. /webhooks/dataforseo/serp) elige
+ * el job de procesamiento: cada familia de endpoint tiene su propia
+ * forma de resultado y su propio taskable, así que no tiene sentido
+ * que un solo job procese todos los tipos. El token de seguridad es el
+ * mismo para todos los tipos (rank_tracking.webhook_token): es un
+ * secreto compartido del webhook, no algo específico de rank tracking
+ * a pesar del nombre de la config (heredado de cuando solo existía
+ * SERP).
  */
 class DataForSeoPostbackController extends Controller
 {
+    private const JOBS = [
+        'serp' => ProcessDataForSeoPostback::class,
+        'onpage' => ProcessOnPageAuditPostback::class,
+    ];
+
     public function __invoke(Request $request, string $type): JsonResponse
     {
         if (! hash_equals((string) config('rank_tracking.webhook_token'), (string) $request->query('token'))) {
             abort(403);
+        }
+
+        $job = self::JOBS[$type] ?? null;
+
+        if ($job === null) {
+            Log::warning('dataforseo.postback.unknown_type', ['type' => $type]);
+
+            return response()->json(['status' => 'unknown_type'], 404);
         }
 
         $payload = $this->decodePayload($request);
@@ -61,7 +84,7 @@ class DataForSeoPostbackController extends Controller
 
         $task->update(['payload_received' => json_encode($payload)]);
 
-        ProcessDataForSeoPostback::dispatch($task->id);
+        $job::dispatch($task->id);
 
         return response()->json(['status' => 'accepted']);
     }

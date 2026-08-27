@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Jobs\ProcessDataForSeoPostback;
+use App\Jobs\ProcessOnPageAuditPostback;
 use App\Models\DataForSeoTask;
+use App\Models\Project;
+use App\Models\SiteAudit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 
@@ -14,9 +17,9 @@ beforeEach(function () {
     config(['rank_tracking.webhook_token' => 'test-token']);
 });
 
-function postbackUrl(string $token = 'test-token'): string
+function postbackUrl(string $token = 'test-token', string $type = 'serp'): string
 {
-    return '/webhooks/dataforseo/serp?token='.$token;
+    return '/webhooks/dataforseo/'.$type.'?token='.$token;
 }
 
 test('rechaza con 403 si el token no coincide', function () {
@@ -85,4 +88,31 @@ test('acepta un payload comprimido en gzip detectado por los magic bytes', funct
     $response->assertOk()->assertJson(['status' => 'accepted']);
     expect(json_decode($task->fresh()->payload_received, true))->toBe($payload);
     Bus::assertDispatched(ProcessDataForSeoPostback::class, fn (ProcessDataForSeoPostback $job) => $job->dataForSeoTaskId === $task->id);
+});
+
+test('devuelve 404 si el tipo de postback no esta registrado', function () {
+    Bus::fake();
+
+    $response = $this->call('POST', postbackUrl(type: 'tipo-inventado'), content: json_encode(['tasks' => [['id' => 'x']]]));
+
+    $response->assertStatus(404)->assertJson(['status' => 'unknown_type']);
+});
+
+test('el tipo onpage despacha ProcessOnPageAuditPostback en vez de ProcessDataForSeoPostback', function () {
+    Bus::fake();
+
+    $project = Project::factory()->create();
+    $audit = SiteAudit::factory()->create(['project_id' => $project->id]);
+    $task = DataForSeoTask::factory()->create([
+        'task_id' => 'task-onpage-postback',
+        'taskable_type' => SiteAudit::class,
+        'taskable_id' => $audit->id,
+        'status' => DataForSeoTaskStatus::Pending,
+    ]);
+
+    $response = $this->call('POST', postbackUrl(type: 'onpage'), content: json_encode(['tasks' => [['id' => 'task-onpage-postback', 'status_code' => 20000]]]));
+
+    $response->assertOk()->assertJson(['status' => 'accepted']);
+    Bus::assertDispatched(ProcessOnPageAuditPostback::class, fn (ProcessOnPageAuditPostback $job) => $job->dataForSeoTaskId === $task->id);
+    Bus::assertNotDispatched(ProcessDataForSeoPostback::class);
 });
