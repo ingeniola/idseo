@@ -61,15 +61,37 @@ actual de la cuenta es justo para el sitio de agencia solo, súbelo
 antes de meter esta app, para que un crawl pesado no le tumbe
 disponibilidad al sitio de agencia.
 
-## 1. Crear el subdominio
+## 1. Subdominio ya creado — corregir el document root
 
-**cPanel (de la cuenta `ingeniola`) → Domains → Create A New Domain**:
+Ya creaste el subdominio `idseo.ingenio.la` en la cuenta `ingeniola`,
+y cPanel le puso el document root por defecto:
+`/home/ingeniola/public_html/idseo.ingenio.la`.
 
-- **Domain**: `idseo.ingenio.la`
-- **Document Root**: cPanel va a proponer algo como
-  `idseo.ingenio.la` dentro de `public_html/` — **cámbialo** a
-  `idseo/public` (o créalo así y ajusta en el paso 3 si no te deja
-  escribir una ruta fuera de `public_html/` en este formulario).
+Esa ruta **no sirve tal cual** para Laravel: el document root público
+tiene que apuntar específicamente a la carpeta `public/` de la app,
+nunca a la carpeta que contiene el código completo — si no, `.env`,
+`app/`, `database/` y todo lo demás quedarían accesibles por HTTP.
+
+El código de la app va a vivir **fuera** de `public_html`, en
+`/home/ingeniola/idseo` (lo clonas en el paso 3). Corrige el document
+root ahora para que apunte a `/home/ingeniola/idseo/public`:
+
+- **WHM → Domains → idseo.ingenio.la → Document Root** → escribe
+  `/home/ingeniola/idseo/public` y guarda.
+- Si esa pantalla de WHM no te deja editar el docroot de un
+  subdominio (a veces solo lo hace para dominios/addon domains): entra
+  a **cPanel (cuenta `ingeniola`) → Domains**, busca
+  `idseo.ingenio.la` en la lista, y ahí sí suele dejar editar el
+  "Document Root" con el ícono de lápiz.
+- Si ninguna de las dos te deja escribir una ruta fuera de
+  `public_html/`, dímelo — hay una alternativa (symlink desde
+  `public_html/idseo.ingenio.la` hacia `idseo/public`) pero es menos
+  limpia y prefiero confirmarla contigo antes de dártela por default.
+
+No hace falta borrar la carpeta vacía
+`public_html/idseo.ingenio.la` que cPanel ya creó — puedes dejarla ahí
+sin usar, o borrarla, da igual una vez que el document root apunta a
+otro lado.
 
 ## 2. PHP
 
