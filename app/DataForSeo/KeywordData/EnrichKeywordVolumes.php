@@ -69,8 +69,15 @@ class EnrichKeywordVolumes
         $response = $this->client->post(self::ENDPOINT, $tasks, $projectId);
 
         $updated = 0;
+        $failures = [];
 
         foreach ($response->tasks as $task) {
+            if (! $task->isSuccessful()) {
+                $failures[$task->statusMessage] = $task->statusMessage;
+
+                continue;
+            }
+
             foreach ($task->result ?? [] as $row) {
                 $match = $keywords->first(
                     fn (Keyword $keyword) => $keyword->keyword === ($row['keyword'] ?? null)
@@ -93,6 +100,10 @@ class EnrichKeywordVolumes
             }
         }
 
-        return new KeywordVolumeEnrichmentResult(requested: $keywords->count(), updated: $updated);
+        return new KeywordVolumeEnrichmentResult(
+            requested: $keywords->count(),
+            updated: $updated,
+            failures: array_values($failures),
+        );
     }
 }

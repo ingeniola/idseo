@@ -422,6 +422,20 @@ class KeywordsRelationManager extends RelationManager
                     return;
                 }
 
+                if ($result->failures !== []) {
+                    Notification::make()
+                        ->title(__('keywords.enrich.partial_failure', [
+                            'updated' => $result->updated,
+                            'requested' => $result->requested,
+                            'errors' => implode(' / ', $result->failures),
+                        ]))
+                        ->danger()
+                        ->persistent()
+                        ->send();
+
+                    return;
+                }
+
                 Notification::make()
                     ->title(__('keywords.enrich.success', ['updated' => $result->updated, 'requested' => $result->requested]))
                     ->success()

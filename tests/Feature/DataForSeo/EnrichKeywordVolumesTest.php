@@ -86,6 +86,60 @@ test('agrupa keywords por ubicacion e idioma en una sola llamada y actualiza el 
     expect($us1->fresh()->search_volume)->toBe(5000);
 });
 
+test('una tarea con status_code de error no actualiza esas keywords y queda reportada en failures', function () {
+    $project = Project::factory()->create();
+
+    $bad = Keyword::factory()->create(['project_id' => $project->id, 'keyword' => 'agencia seo en honduras', 'location_code' => 2340, 'language_code' => 'es-419', 'search_volume' => null]);
+    $good = Keyword::factory()->create(['project_id' => $project->id, 'keyword' => 'running shoes', 'location_code' => 2840, 'language_code' => 'en']);
+
+    Http::fake([
+        '*/keywords_data/google_ads/search_volume/live' => Http::response([
+            'version' => '0.1.20250101',
+            'status_code' => 20000,
+            'status_message' => 'Ok.',
+            'time' => '0.2 sec.',
+            'cost' => 0.025,
+            'tasks_count' => 2,
+            'tasks_error' => 1,
+            'tasks' => [
+                [
+                    'id' => 'task-1',
+                    'status_code' => 40501,
+                    'status_message' => "Invalid Field: 'language_code'.",
+                    'time' => '0.05 sec.',
+                    'cost' => 0.0,
+                    'result_count' => 0,
+                    'path' => ['v3', 'keywords_data', 'google_ads', 'search_volume', 'live'],
+                    'data' => [],
+                    'result' => null,
+                ],
+                [
+                    'id' => 'task-2',
+                    'status_code' => 20000,
+                    'status_message' => 'Ok.',
+                    'time' => '0.1 sec.',
+                    'cost' => 0.025,
+                    'result_count' => 1,
+                    'path' => ['v3', 'keywords_data', 'google_ads', 'search_volume', 'live'],
+                    'data' => [],
+                    'result' => [
+                        ['keyword' => 'running shoes', 'location_code' => 2840, 'language_code' => 'en', 'search_volume' => 5000, 'cpc' => 1.2, 'competition_index' => 80],
+                    ],
+                ],
+            ],
+        ], 200),
+    ]);
+
+    $result = app(EnrichKeywordVolumes::class)->execute($project->keywords()->get());
+
+    expect($result->requested)->toBe(2)
+        ->and($result->updated)->toBe(1)
+        ->and($result->failures)->toBe(["Invalid Field: 'language_code'."]);
+
+    expect($bad->fresh()->search_volume)->toBeNull()
+        ->and($good->fresh()->search_volume)->toBe(5000);
+});
+
 test('no manda nada y devuelve cero si la coleccion esta vacia', function () {
     Http::fake();
 
