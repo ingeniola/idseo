@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\UserRole;
 use App\Filament\Resources\Projects\Pages\CreateProject;
+use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Models\Language;
 use App\Models\Project;
 use App\Models\User;
@@ -40,13 +41,28 @@ test('asignar usuarios internos a un proyecto usa la tabla pivote project_user',
         ->and($user->projects()->first()->is($project))->toBeTrue();
 });
 
-test('la pagina de edicion de proyecto carga con la seccion de keywords', function () {
+test('al entrar a un proyecto aterriza en la pestaña de Keywords, no en el formulario de edición', function () {
     $admin = User::factory()->create(['role' => UserRole::Admin]);
     $project = Project::factory()->create();
 
-    $this->actingAs($admin)
-        ->get("/admin/projects/{$project->id}/edit")
-        ->assertSuccessful();
+    // KeywordsRelationManager es el primero en ProjectResource::getRelations(),
+    // así que su clave (el índice del array, 0-indexado) es lo que debe
+    // quedar activo por defecto — no null, que es la clave sintética
+    // del tab combinado "Configuración del proyecto" (ver el docblock
+    // de EditProject::mount()).
+    Livewire::actingAs($admin)
+        ->test(EditProject::class, ['record' => $project->getRouteKey()])
+        ->assertSet('activeRelationManager', '0');
+});
+
+test('la pestaña de configuración del proyecto sigue disponible para editar', function () {
+    $admin = User::factory()->create(['role' => UserRole::Admin]);
+    $project = Project::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(EditProject::class, ['record' => $project->getRouteKey()])
+        ->set('activeRelationManager', null)
+        ->assertSeeText(__('projects.fields.google_business_place_id'));
 });
 
 test('el selector de idioma del proyecto solo ofrece idiomas validos para keywords_data/google_ads', function () {

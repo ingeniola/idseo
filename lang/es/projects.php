@@ -28,4 +28,6 @@ return [
         'heading' => 'Visibilidad agregada del proyecto',
         'dataset_label' => 'Visibilidad',
     ],
+
+    'edit_tab_label' => 'Configuración del proyecto',
 ];
