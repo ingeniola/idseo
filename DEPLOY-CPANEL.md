@@ -61,6 +61,42 @@ actual de la cuenta es justo para el sitio de agencia solo, súbelo
 antes de meter esta app, para que un crawl pesado no le tumbe
 disponibilidad al sitio de agencia.
 
+## 0.5. Acceso SSH y jailshell
+
+Por defecto muchas cuentas cPanel tienen el shell deshabilitado. Si
+`su - ingeniola` responde `Shell access is not enabled on your
+account!`: **WHM → Manage Shell Access** → pon la cuenta `ingeniola`
+en `/bin/bash` (o al menos `jailshell`).
+
+Si te quedas en **jailshell** (verás el prompt como
+`-jailshell: ...` en algunos mensajes de error), ojo con dos cosas
+que causaron problemas reales en este despliegue:
+
+- El jailshell puede **ocultar rutas que sí existen** en el servidor
+  real, aunque el resto del sistema las vea — `/opt/cpanel/composer`
+  puede dar "command not found" incluso si `Software → Composer`
+  está instalado a nivel de WHM. No asumas que un `command not
+  found` significa que no está instalado; puede ser una restricción
+  de visibilidad del jail. Si pasa, instala Composer localmente en la
+  propia carpeta de la app con el instalador oficial:
+
+  ```bash
+  cd /home/ingeniola/idseo
+  php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
+  php composer-setup.php
+  php -r "unlink('composer-setup.php');"
+  # queda composer.phar en esta carpeta; úsalo como:
+  # php composer.phar install --no-dev --optimize-autoloader
+  ```
+
+- Si cloncas el repo (o corres cualquier comando) como `root` antes
+  de cambiar a `ingeniola`, los archivos quedan `root:root` y
+  `ingeniola` no puede escribir ahí. Arréglalo una vez, como root:
+
+  ```bash
+  chown -R ingeniola:ingeniola /home/ingeniola/idseo
+  ```
+
 ## 1. Subdominio ya creado — servir `public/` vía symlink
 
 Ya creaste el subdominio `idseo.ingenio.la` en la cuenta `ingeniola`.
@@ -114,12 +150,40 @@ mantenimiento, que te doy si la necesitas.
 
 - **WHM → MultiPHP Manager**: asigna PHP 8.3 u 8.4 específicamente al
   subdominio `idseo.ingenio.la` (no cambia lo que ya usa
-  `agencia.ingenio.la`).
+  `agencia.ingenio.la`). **Nota real:** este `composer.lock` fue
+  generado con PHP 8.4 (varios paquetes symfony/* exigen `php
+  >=8.4.1`); si tu servidor tiene 8.3 y 8.4 disponibles, usa 8.4 para
+  evitarte un conflicto de dependencias al hacer `composer install`.
 - **WHM → MultiPHP INI Editor** → selecciona `idseo.ingenio.la` →
   pestaña de extensiones: activa `redis` y confirma el resto de la
   lista de arriba.
 - Sube `memory_limit` a al menos 256M y `max_execution_time` a 120
   para ese subdominio.
+
+**Importante — MultiPHP Manager solo cambia el PHP del handler
+web/FPM, no el `php` de la línea de comandos (SSH/cron/Supervisor).**
+Verifica con `php -v` después de asignar la versión: si sigue
+mostrando la versión vieja, el CLI está resolviendo a otro binario.
+En ese caso usa la ruta explícita de EA4 en **todos** los comandos de
+este documento a partir de aquí (`artisan`, `composer`, el cron del
+paso 9, el `command=` de Supervisor):
+
+```bash
+/opt/cpanel/ea-php84/root/usr/bin/php artisan ...
+```
+
+(Cambia `ea-php84` por tu versión real; confirma la ruta con
+`ls /opt/cpanel/ | grep ea-php`.)
+
+Además, las extensiones que actives en MultiPHP INI Editor **tampoco
+alcanzan al CLI** — son dos configuraciones distintas. Si `php -m |
+grep intl` (con el binario de EA4 de arriba) no muestra nada, o el
+comando `dataforseo:sync-locations` falla con `Class "Redis" not
+found`, instala el paquete de la extensión para esa versión de PHP
+desde **WHM → EasyApache 4 → Customize** (no MultiPHP INI Editor):
+busca y agrega `ea-php84-php-intl` y/o `ea-php84-php-redis` (ajusta
+el número de versión), y espera a que termine el rebuild de EA4.
+Vuelve a verificar con `php -m | grep -iE "intl|redis"`.
 
 ## 3. Código
 
@@ -196,6 +260,15 @@ DATAFORSEO_LOGIN=<tu login real>
 DATAFORSEO_PASSWORD=<tu password real>
 DATAFORSEO_WEBHOOK_TOKEN=<genera uno largo y random, ej: openssl rand -hex 32>
 
+# OJO: el dashboard de DataForSEO muestra el login/password en texto
+# plano y también, aparte, un blob en Base64 de "login:password" como
+# formato alternativo para el header Authorization. DATAFORSEO_PASSWORD
+# es el password EN TEXTO PLANO, nunca ese blob — pegarlo por error
+# aquí (o en un curl -u "login:BLOB") da HTTP 401 / status_code 40100
+# "You are not authorized" y se confunde fácil con el aviso de
+# "Verify your account to start fetching data" del dashboard, que es
+# un problema distinto.
+
 # Sección 9 del SPEC: nunca "local" en producción — este servidor
 # también aloja sitios de clientes en otras cuentas. Usa S3, Wasabi,
 # Backblaze B2, o similar.
@@ -220,6 +293,25 @@ php artisan migrate --force
 php artisan dataforseo:sync-locations
 ```
 
+(Recuerda usar el binario explícito de EA4 si el CLI no resuelve a
+8.3/8.4 — ver paso 2.)
+
+El catálogo completo de `serp/google/locations` son ~270,000 filas;
+si tu cuenta tiene un `memory_limit` de CLI bajo (verifica con `php -i
+| grep memory_limit` — el de MultiPHP INI Editor no aplica al CLI,
+igual que las extensiones), el comando puede fallar o quedarse
+colgado sin mensaje de error visible. Si pasa, corre con un límite
+más alto solo para esta ejecución:
+
+```bash
+php -d memory_limit=512M artisan dataforseo:sync-locations
+```
+
+El comando también avisa si encuentra ubicaciones cuyo
+`parent_code` no existe en el catálogo que DataForSEO mismo devolvió
+(pasa con datos reales, es normal) — las guarda sin padre y te dice
+cuántas fueron; no es un error.
+
 **Antes de prometerle SEO local a un cliente en Honduras, Guatemala,
 El Salvador, Nicaragua, Costa Rica o Panamá**: revisa a mano en la
 tabla `locations` qué granularidad (`location_type`) trae DataForSEO
@@ -243,6 +335,15 @@ chown -R ingeniola:ingeniola storage bootstrap/cache
 
 ```
 * * * * * cd /home/ingeniola/idseo && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Si tuviste que usar el binario explícito de EA4 en el paso 2 porque
+el `php` del CLI no resolvía a 8.3/8.4, úsalo aquí también (cron
+corre con su propio `PATH`, que puede no coincidir con el de tu
+sesión SSH):
+
+```
+* * * * * cd /home/ingeniola/idseo && /opt/cpanel/ea-php84/root/usr/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
 Si `agencia.ingenio.la` u otra app de la cuenta ya tiene su propio
@@ -273,6 +374,14 @@ user=ingeniola
 redirect_stderr=true
 stdout_logfile=/home/ingeniola/idseo/storage/logs/horizon.log
 stopwaitsecs=3600
+```
+
+Igual que el cron: si el `php` del sistema no es el 8.3/8.4 que
+activaste, cambia la línea `command=` para usar el binario explícito
+de EA4, por ejemplo:
+
+```ini
+command=/opt/cpanel/ea-php84/root/usr/bin/php /home/ingeniola/idseo/artisan horizon
 ```
 
 ```bash
