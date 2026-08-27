@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Projects\RelationManagers;
 
 use App\Audit\AuditLogger;
+use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\KeywordData\EnrichKeywordVolumes;
 use App\Enums\AuditEvent;
 use App\Filament\Imports\KeywordImporter;
+use App\Jobs\ScheduleRankTrackingTasks;
 use App\Models\Keyword;
 use App\Models\Language;
 use App\Models\Location;
@@ -45,6 +47,15 @@ use Illuminate\Support\Facades\RateLimiter;
 class KeywordsRelationManager extends RelationManager
 {
     protected static string $relationship = 'keywords';
+
+    /**
+     * Filament no llama a formatStateUsing()/description() cuando el
+     * estado base de un TextColumn es blank (toma un atajo que solo
+     * pinta el placeholder) — justo el caso que hay que distinguir
+     * aquí ("sin datos todavía" vs. "en camino"). Un valor centinela
+     * no-blank fuerza el camino de formato completo.
+     */
+    private const PROCESSING_STATE = '__rank_tracking_processing__';
 
     public function form(Schema $schema): Schema
     {
@@ -100,7 +111,16 @@ class KeywordsRelationManager extends RelationManager
     {
         return $table
             ->recordTitleAttribute('keyword')
-            ->modifyQueryUsing(fn (Builder $query) => $query->with('latestRanking'))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('latestRanking')->withExists([
+                // Indicador de "procesando" en la columna de posición
+                // (sección de UX): sin esto, una keyword recién creada
+                // o esperando el resultado de un task_post Standard se
+                // ve idéntica a una que nunca se ha rastreado — nada
+                // distingue "sin datos todavía" de "en camino".
+                'dataForSeoTasks as has_pending_rank_tracking_task' => fn (Builder $query) => $query
+                    ->where('endpoint', ScheduleRankTrackingTasks::ENDPOINT)
+                    ->where('status', DataForSeoTaskStatus::Pending),
+            ]))
             ->columns([
                 TextColumn::make('keyword')
                     ->label(__('keywords.fields.keyword'))
@@ -109,6 +129,12 @@ class KeywordsRelationManager extends RelationManager
                 TextColumn::make('latestRanking.position')
                     ->label(__('keywords.fields.current_position'))
                     ->numeric()
+                    ->getStateUsing(fn (Keyword $record) => $record->latestRanking?->position
+                        ?? ($record->has_pending_rank_tracking_task ? self::PROCESSING_STATE : null))
+                    ->formatStateUsing(fn ($state) => $state === self::PROCESSING_STATE
+                        ? __('keywords.fields.rank_tracking_processing')
+                        : $state)
+                    ->color(fn ($state) => $state === self::PROCESSING_STATE ? 'warning' : null)
                     ->placeholder('—')
                     ->sortable(query: fn (Builder $query, string $direction) => $query->orderBy(
                         Ranking::query()

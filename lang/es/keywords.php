@@ -20,6 +20,7 @@ return [
         'position_change' => 'Cambio',
         'ranking_url' => 'URL rankeando',
         'serp_features' => 'Features',
+        'rank_tracking_processing' => 'Procesando…',
     ],
 
     'movement' => [

@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Enums\UserRole;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
+use App\Models\DataForSeoTask;
 use App\Models\Keyword;
 use App\Models\Project;
 use App\Models\Ranking;
@@ -113,6 +115,37 @@ test('filtra keywords por movimiento sin dato', function () {
         ->filterTable('movement', 'none')
         ->assertCanSeeTableRecords([$sinDato])
         ->assertCanNotSeeTableRecords([$conDato]);
+});
+
+test('muestra procesando bajo la posicion mientras hay una tarea de rank tracking pendiente', function () {
+    $project = Project::factory()->create();
+    $procesando = Keyword::factory()->create(['project_id' => $project->id]);
+    $sinTarea = Keyword::factory()->create(['project_id' => $project->id]);
+
+    DataForSeoTask::factory()->create([
+        'taskable_type' => Keyword::class,
+        'taskable_id' => $procesando->id,
+        'status' => DataForSeoTaskStatus::Pending,
+    ]);
+
+    mountKeywordsRelationManager($project)
+        ->assertTableColumnFormattedStateSet('latestRanking.position', 'Procesando…', $procesando)
+        ->assertTableColumnFormattedStateSet('latestRanking.position', null, $sinTarea)
+        ->assertSee('Procesando…');
+});
+
+test('no muestra procesando si la tarea de rank tracking ya se completo', function () {
+    $project = Project::factory()->create();
+    $keyword = Keyword::factory()->create(['project_id' => $project->id]);
+
+    DataForSeoTask::factory()->create([
+        'taskable_type' => Keyword::class,
+        'taskable_id' => $keyword->id,
+        'status' => DataForSeoTaskStatus::Completed,
+    ]);
+
+    mountKeywordsRelationManager($project)
+        ->assertTableColumnFormattedStateSet('latestRanking.position', null, $keyword);
 });
 
 test('la accion ver evolucion abre sin errores', function () {

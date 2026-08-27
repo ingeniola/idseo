@@ -29,7 +29,7 @@ class ScheduleRankTrackingTasks implements ShouldQueue
 {
     use Queueable;
 
-    private const ENDPOINT = 'serp/google/organic/task_post';
+    public const ENDPOINT = 'serp/google/organic/task_post';
 
     public function handle(DataForSeoClient $client, DueKeywordsFinder $dueKeywordsFinder): void
     {

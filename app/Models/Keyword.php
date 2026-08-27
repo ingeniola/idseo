@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -24,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $competition
  * @property Carbon|null $volume_updated_at
  * @property bool $is_active
+ * @property-read bool|null $has_pending_rank_tracking_task Solo presente cuando se carga vía withExists() en KeywordsRelationManager.
  */
 class Keyword extends Model
 {
@@ -92,6 +94,14 @@ class Keyword extends Model
     public function latestSerpSnapshot(): HasOne
     {
         return $this->hasOne(SerpSnapshot::class)->latestOfMany('captured_at');
+    }
+
+    /**
+     * @return MorphMany<DataForSeoTask, $this>
+     */
+    public function dataForSeoTasks(): MorphMany
+    {
+        return $this->morphMany(DataForSeoTask::class, 'taskable');
     }
 
     /**
