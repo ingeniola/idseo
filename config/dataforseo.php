@@ -80,4 +80,31 @@ return [
 
     'keyword_ideas_live_cost_estimate' => env('DATAFORSEO_KEYWORD_IDEAS_LIVE_COST_ESTIMATE'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Estimación de costo — perfil de backlinks (Live)
+    |--------------------------------------------------------------------------
+    |
+    | Fase 3, sección 5.1: "Backlinks". SyncBacklinkProfile hace 3
+    | llamadas Live (summary, referring_domains, backlinks) por
+    | actualización — esta es la suma estimada de las 3, no el precio
+    | de una sola. Mismo caso que las estimaciones de arriba: sin
+    | precio confirmado en la documentación pública disponible al
+    | construir este módulo.
+    |
+    */
+
+    'backlink_profile_live_cost_estimate' => env('DATAFORSEO_BACKLINK_PROFILE_LIVE_COST_ESTIMATE'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Estimación de costo — comparativa de backlinks con competidor (Live)
+    |--------------------------------------------------------------------------
+    |
+    | backlinks/summary/live, una sola llamada por comparación.
+    |
+    */
+
+    'backlink_comparison_live_cost_estimate' => env('DATAFORSEO_BACKLINK_COMPARISON_LIVE_COST_ESTIMATE'),
+
 ];

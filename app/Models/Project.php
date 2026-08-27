@@ -171,4 +171,46 @@ class Project extends Model
     {
         return $this->hasMany(SearchConsoleMetric::class);
     }
+
+    /**
+     * Fase 3: backlinks (sección 5 del SPEC). Incluye tanto el perfil
+     * propio del proyecto (domain = projects.domain) como
+     * instantáneas de dominios competidores guardadas para comparar —
+     * ver el docblock de la migración.
+     *
+     * @return HasMany<BacklinkSummary, $this>
+     */
+    public function backlinkSummaries(): HasMany
+    {
+        return $this->hasMany(BacklinkSummary::class);
+    }
+
+    /**
+     * Último perfil de backlinks del propio dominio del proyecto (no
+     * de un competidor comparado).
+     *
+     * @return HasOne<BacklinkSummary, $this>
+     */
+    public function latestOwnBacklinkSummary(): HasOne
+    {
+        return $this->hasOne(BacklinkSummary::class)
+            ->where('backlink_summaries.domain', $this->domain)
+            ->latestOfMany('captured_at');
+    }
+
+    /**
+     * @return HasMany<Backlink, $this>
+     */
+    public function backlinks(): HasMany
+    {
+        return $this->hasMany(Backlink::class);
+    }
+
+    /**
+     * @return HasMany<ReferringDomain, $this>
+     */
+    public function referringDomains(): HasMany
+    {
+        return $this->hasMany(ReferringDomain::class);
+    }
 }

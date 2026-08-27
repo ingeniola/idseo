@@ -7,9 +7,11 @@ namespace App\Filament\Resources\Projects;
 use App\Filament\Resources\Projects\Pages\CreateProject;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
+use App\Filament\Resources\Projects\RelationManagers\BacklinksRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\CompetitorsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordIdeasRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
+use App\Filament\Resources\Projects\RelationManagers\ReferringDomainsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\ReportsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\SearchConsoleRelationManager;
 use App\Filament\Resources\Projects\Schemas\ProjectForm;
@@ -62,6 +64,8 @@ class ProjectResource extends Resource
             CompetitorsRelationManager::class,
             KeywordIdeasRelationManager::class,
             SearchConsoleRelationManager::class,
+            BacklinksRelationManager::class,
+            ReferringDomainsRelationManager::class,
         ];
     }
 
