@@ -6,14 +6,17 @@ use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Enums\UserRole;
 use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
+use App\Jobs\TrackKeywordsNow;
 use App\Models\DataForSeoTask;
 use App\Models\Keyword;
 use App\Models\Language;
+use App\Models\Location;
 use App\Models\Project;
 use App\Models\Ranking;
 use App\Models\User;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
@@ -162,6 +165,58 @@ test('el selector de idioma para agregar keywords solo ofrece idiomas validos pa
             fn (Select $field) => array_key_exists('es', $field->getOptions())
                 && ! array_key_exists('es-419', $field->getOptions()),
         );
+});
+
+test('crear una keyword individual dispara TrackKeywordsNow para esa keyword', function () {
+    Queue::fake();
+
+    $project = Project::factory()->create();
+    $location = Location::factory()->create();
+    $language = Language::query()->create(['language_code' => 'es', 'language_name' => 'Spanish', 'valid_for_google_ads_keywords' => true]);
+
+    mountKeywordsRelationManager($project)
+        ->callTableAction('create', data: [
+            'keyword' => 'clinica dental',
+            'location_code' => $location->location_code,
+            'language_code' => $language->language_code,
+            'is_active' => true,
+        ])
+        ->assertHasNoTableActionErrors();
+
+    $keyword = Keyword::query()->where('keyword', 'clinica dental')->firstOrFail();
+
+    Queue::assertPushed(TrackKeywordsNow::class, fn (TrackKeywordsNow $job) => $job->keywordIds === [$keyword->id]);
+});
+
+test('el pegado masivo dispara TrackKeywordsNow solo con las keywords nuevas, no las que ya existian', function () {
+    Queue::fake();
+
+    $project = Project::factory()->create();
+    $location = Location::factory()->create();
+    $language = Language::query()->create(['language_code' => 'es', 'language_name' => 'Spanish', 'valid_for_google_ads_keywords' => true]);
+
+    $existing = Keyword::factory()->create([
+        'project_id' => $project->id,
+        'keyword' => 'ya existia',
+        'location_code' => $location->location_code,
+        'language_code' => $language->language_code,
+    ]);
+
+    mountKeywordsRelationManager($project)
+        ->callTableAction('bulkPaste', data: [
+            'keywords_raw' => "ya existia\nkeyword nueva",
+            'location_code' => $location->location_code,
+            'language_code' => $language->language_code,
+            'tags' => [],
+        ])
+        ->assertHasNoTableActionErrors();
+
+    $nueva = Keyword::query()->where('keyword', 'keyword nueva')->firstOrFail();
+
+    Queue::assertPushed(TrackKeywordsNow::class, function (TrackKeywordsNow $job) use ($nueva, $existing) {
+        return $job->keywordIds === [$nueva->id]
+            && ! in_array($existing->id, $job->keywordIds, true);
+    });
 });
 
 test('la accion ver evolucion abre sin errores', function () {

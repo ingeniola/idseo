@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use App\DataForSeo\CostControl\CircuitBreaker;
-use App\DataForSeo\DataForSeoClient;
 use App\DataForSeo\Enums\DataForSeoTaskStatus;
 use App\Jobs\ScheduleRankTrackingTasks;
 use App\Models\DataForSeoTask;
 use App\Models\Keyword;
 use App\Models\Project;
 use App\RankTracking\DueKeywordsFinder;
+use App\RankTracking\PostRankTrackingTasks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -50,7 +50,7 @@ test('no programa nada si falta el webhook token', function () {
 
     Http::fake();
 
-    app(ScheduleRankTrackingTasks::class)->handle(app(DataForSeoClient::class), app(DueKeywordsFinder::class));
+    app(ScheduleRankTrackingTasks::class)->handle(app(PostRankTrackingTasks::class), app(DueKeywordsFinder::class));
 
     Http::assertNothingSent();
     Log::shouldHaveReceived('error')->once();
@@ -67,7 +67,7 @@ test('crea una DataForSeoTask pending por keyword due al postear correctamente',
         '*/serp/google/organic/task_post' => Http::response(fakeTaskPostResponse(['task-abc']), 200),
     ]);
 
-    app(ScheduleRankTrackingTasks::class)->handle(app(DataForSeoClient::class), app(DueKeywordsFinder::class));
+    app(ScheduleRankTrackingTasks::class)->handle(app(PostRankTrackingTasks::class), app(DueKeywordsFinder::class));
 
     Http::assertSentCount(1);
 
@@ -102,7 +102,7 @@ test('marca la tarea como failed cuando el status_code de la tarea individual no
         '*/serp/google/organic/task_post' => Http::response(fakeTaskPostResponse(['task-fail'], 40501), 200),
     ]);
 
-    app(ScheduleRankTrackingTasks::class)->handle(app(DataForSeoClient::class), app(DueKeywordsFinder::class));
+    app(ScheduleRankTrackingTasks::class)->handle(app(PostRankTrackingTasks::class), app(DueKeywordsFinder::class));
 
     $task = DataForSeoTask::query()->where('task_id', 'task-fail')->first();
 
@@ -123,7 +123,7 @@ test('divide el lote en varios requests segun max_tasks_per_request', function (
             ->push(fakeTaskPostResponse(['task-2']), 200),
     ]);
 
-    app(ScheduleRankTrackingTasks::class)->handle(app(DataForSeoClient::class), app(DueKeywordsFinder::class));
+    app(ScheduleRankTrackingTasks::class)->handle(app(PostRankTrackingTasks::class), app(DueKeywordsFinder::class));
 
     Http::assertSentCount(2);
     expect(DataForSeoTask::query()->count())->toBe(2);
@@ -142,9 +142,10 @@ test('con el circuit breaker de presupuesto activo el job no lanza excepcion y n
 
     Http::fake();
 
-    // DataForSeoBudgetExceededException se captura dentro de postChunk() por
-    // proyecto: el job debe recorrer ambos proyectos sin propagar la excepción.
-    app(ScheduleRankTrackingTasks::class)->handle(app(DataForSeoClient::class), app(DueKeywordsFinder::class));
+    // DataForSeoBudgetExceededException se captura dentro de
+    // PostRankTrackingTasks::postChunk() por proyecto: el job debe
+    // recorrer ambos proyectos sin propagar la excepción.
+    app(ScheduleRankTrackingTasks::class)->handle(app(PostRankTrackingTasks::class), app(DueKeywordsFinder::class));
 
     Http::assertNothingSent();
     expect(DataForSeoTask::query()->count())->toBe(0);

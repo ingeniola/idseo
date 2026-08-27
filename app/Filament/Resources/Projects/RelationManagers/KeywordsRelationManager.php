@@ -10,12 +10,13 @@ use App\DataForSeo\Exceptions\DataForSeoBudgetExceededException;
 use App\DataForSeo\KeywordData\EnrichKeywordVolumes;
 use App\Enums\AuditEvent;
 use App\Filament\Imports\KeywordImporter;
-use App\Jobs\ScheduleRankTrackingTasks;
+use App\Jobs\TrackKeywordsNow;
 use App\Models\Keyword;
 use App\Models\Language;
 use App\Models\Location;
 use App\Models\Project;
 use App\Models\Ranking;
+use App\RankTracking\PostRankTrackingTasks;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -118,7 +119,7 @@ class KeywordsRelationManager extends RelationManager
                 // ve idéntica a una que nunca se ha rastreado — nada
                 // distingue "sin datos todavía" de "en camino".
                 'dataForSeoTasks as has_pending_rank_tracking_task' => fn (Builder $query) => $query
-                    ->where('endpoint', ScheduleRankTrackingTasks::ENDPOINT)
+                    ->where('endpoint', PostRankTrackingTasks::ENDPOINT)
                     ->where('status', DataForSeoTaskStatus::Pending),
             ]))
             ->columns([
@@ -217,7 +218,8 @@ class KeywordsRelationManager extends RelationManager
                 self::movementFilter(),
             ])
             ->headerActions([
-                CreateAction::make(),
+                CreateAction::make()
+                    ->after(fn (Keyword $record) => TrackKeywordsNow::dispatch([$record->id])),
                 self::bulkPasteAction(),
                 ImportAction::make()
                     ->importer(KeywordImporter::class)
@@ -372,6 +374,7 @@ class KeywordsRelationManager extends RelationManager
                     ->values();
 
                 $created = 0;
+                $createdKeywordIds = [];
 
                 /** @var Project $project */
                 $project = $livewire->getOwnerRecord();
@@ -388,7 +391,12 @@ class KeywordsRelationManager extends RelationManager
 
                     if ($keyword->wasRecentlyCreated) {
                         $created++;
+                        $createdKeywordIds[] = $keyword->id;
                     }
+                }
+
+                if ($createdKeywordIds !== []) {
+                    TrackKeywordsNow::dispatch($createdKeywordIds);
                 }
 
                 Notification::make()
