@@ -61,37 +61,54 @@ actual de la cuenta es justo para el sitio de agencia solo, súbelo
 antes de meter esta app, para que un crawl pesado no le tumbe
 disponibilidad al sitio de agencia.
 
-## 1. Subdominio ya creado — corregir el document root
+## 1. Subdominio ya creado — servir `public/` vía symlink
 
-Ya creaste el subdominio `idseo.ingenio.la` en la cuenta `ingeniola`,
-y cPanel le puso el document root por defecto:
-`/home/ingeniola/public_html/idseo.ingenio.la`.
+Ya creaste el subdominio `idseo.ingenio.la` en la cuenta `ingeniola`.
+cPanel (tema Jupiter) le puso el document root por defecto,
+`/home/ingeniola/public_html/idseo.ingenio.la`, y **no deja editar esa
+ruta a algo fuera de `public_html/`** ni desde "Create a New Domain"
+ni desde "Manage the Domain" — el campo está anclado al prefijo
+`/public_html/`.
 
-Esa ruta **no sirve tal cual** para Laravel: el document root público
-tiene que apuntar específicamente a la carpeta `public/` de la app,
-nunca a la carpeta que contiene el código completo — si no, `.env`,
-`app/`, `database/` y todo lo demás quedarían accesibles por HTTP.
+El document root público tiene que apuntar específicamente a la
+carpeta `public/` de Laravel, nunca a la carpeta que contiene el
+código completo — si no, `.env`, `app/`, `database/` y todo lo demás
+quedarían accesibles por HTTP. Como la UI no deja cambiar la ruta,
+la solución es un **symlink**: la carpeta que cPanel ya apunta como
+document root pasa a *ser* (vía enlace simbólico) la carpeta
+`public/` de la app, sin tocar configuración de Apache ni el document
+root declarado.
 
-El código de la app va a vivir **fuera** de `public_html`, en
-`/home/ingeniola/idseo` (lo clonas en el paso 3). Corrige el document
-root ahora para que apunte a `/home/ingeniola/idseo/public`:
+```bash
+su - ingeniola
 
-- **WHM → Domains → idseo.ingenio.la → Document Root** → escribe
-  `/home/ingeniola/idseo/public` y guarda.
-- Si esa pantalla de WHM no te deja editar el docroot de un
-  subdominio (a veces solo lo hace para dominios/addon domains): entra
-  a **cPanel (cuenta `ingeniola`) → Domains**, busca
-  `idseo.ingenio.la` en la lista, y ahí sí suele dejar editar el
-  "Document Root" con el ícono de lápiz.
-- Si ninguna de las dos te deja escribir una ruta fuera de
-  `public_html/`, dímelo — hay una alternativa (symlink desde
-  `public_html/idseo.ingenio.la` hacia `idseo/public`) pero es menos
-  limpia y prefiero confirmarla contigo antes de dártela por default.
+# Clona el código si todavía no existe /home/ingeniola/idseo:
+git clone <url-del-repo> /home/ingeniola/idseo
 
-No hace falta borrar la carpeta vacía
-`public_html/idseo.ingenio.la` que cPanel ya creó — puedes dejarla ahí
-sin usar, o borrarla, da igual una vez que el document root apunta a
-otro lado.
+# Quita la carpeta vacía que cPanel creó como placeholder...
+rm -rf /home/ingeniola/public_html/idseo.ingenio.la
+
+# ...y reemplázala por un symlink a la carpeta public/ de la app:
+ln -s /home/ingeniola/idseo/public /home/ingeniola/public_html/idseo.ingenio.la
+```
+
+Verifica:
+
+```bash
+ls -la /home/ingeniola/public_html/ | grep idseo
+```
+
+Debería mostrar `idseo.ingenio.la -> /home/ingeniola/idseo/public`.
+
+Deja el "Document Root" de cPanel tal como está — no hace falta
+tocarlo, Apache sigue el symlink de forma transparente.
+
+**Si al visitar el subdominio da 403 Forbidden** (poco común; pasa si
+el servidor tiene `SymLinksIfOwnerMatch` u otra restricción de
+symlinks activada más estricta de lo normal): avísame, hay una
+alternativa con un `index.php` "passthrough" dentro de
+`public_html/idseo.ingenio.la/` que funciona siempre, un poco más de
+mantenimiento, que te doy si la necesitas.
 
 ## 2. PHP
 
@@ -106,12 +123,12 @@ otro lado.
 
 ## 3. Código
 
+Si ya clonaste el repo en el paso 1, sáltate el `git clone` de abajo.
 Por SSH, como el usuario `ingeniola` (nunca como root para esto):
 
 ```bash
 su - ingeniola
-git clone <url-del-repo> idseo
-cd idseo
+cd /home/ingeniola/idseo
 git checkout main   # o la rama que vayas a desplegar
 
 composer install --no-dev --optimize-autoloader
@@ -126,13 +143,10 @@ activaste para el subdominio, usa el binario explícito de EA4:
 
 (Ajusta `ea-php84` a la versión real.)
 
-Confirma que el document root del subdominio (paso 1) terminó
-apuntando a `/home/ingeniola/idseo/public` y no a
-`/home/ingeniola/idseo` ni a `public_html/idseo` — **nunca** dejes la
-app completa como document root, expondría `.env`, `app/`, el código
-fuente. Si el asistente de cPanel no te dejó escribir esa ruta
-directo: **WHM → Domains → idseo.ingenio.la → Document Root** te deja
-corregirla después de creado el subdominio.
+Confirma que el symlink del paso 1 sigue apuntando bien
+(`ls -la /home/ingeniola/public_html/ | grep idseo`) — **nunca** dejes
+la app completa servida directo por web, expondría `.env`, `app/`, el
+código fuente.
 
 ## 4. Base de datos
 
