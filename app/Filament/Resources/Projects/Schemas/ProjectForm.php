@@ -57,8 +57,8 @@ class ProjectForm
                     ->required(),
                 Select::make('default_language_code')
                     ->label(__('projects.fields.default_language_code'))
-                    ->helperText('Requiere haber corrido antes php artisan dataforseo:sync-locations.')
-                    ->options(fn () => Language::query()->orderBy('language_name')->pluck('language_name', 'language_code'))
+                    ->helperText('Requiere haber corrido antes php artisan dataforseo:sync-locations. Solo se listan los idiomas válidos para keywords_data/google_ads (volumen, ideas de keywords) — algunos códigos de serp/google/languages, como "es-419", no sirven ahí y romperían el enriquecimiento de volumen.')
+                    ->options(fn () => Language::query()->where('valid_for_google_ads_keywords', true)->orderBy('language_name')->pluck('language_name', 'language_code'))
                     ->searchable()
                     ->required(),
                 Select::make('search_engine')

@@ -13,9 +13,9 @@ use Illuminate\Support\Collection;
 
 /**
  * Primera llamada real a la API (sección 11 del SPEC). Sincroniza el
- * espejo local de `locations`/`languages` desde `serp/google/locations`
- * y `serp/google/languages` — endpoints de referencia sin costo, no el
- * flujo task_post/task_get.
+ * espejo local de `locations`/`languages` desde `serp/google/locations`,
+ * `serp/google/languages` y `keywords_data/google_ads/languages` —
+ * endpoints de referencia sin costo, no el flujo task_post/task_get.
  *
  * `location_name_canonical` no tiene una fuente propia confirmada en el
  * payload de DataForSEO (no encontré un campo distinto de
@@ -38,6 +38,7 @@ class DataForSeoSyncLocationsCommand extends Command
     public function handle(DataForSeoClient $client): int
     {
         $this->syncLanguages($client);
+        $this->syncGoogleAdsKeywordLanguages($client);
         $this->syncLocations($client);
 
         return self::SUCCESS;
@@ -59,6 +60,31 @@ class DataForSeoSyncLocationsCommand extends Command
         );
 
         $this->info("Idiomas sincronizados: {$rows->count()}.");
+    }
+
+    /**
+     * serp/google/languages y keywords_data/google_ads/languages son
+     * catálogos distintos en DataForSEO: un language_code válido para
+     * rastrear posiciones (serp/google/organic/task_post) puede ser
+     * rechazado por keywords_data/google_ads/* con "Invalid Field:
+     * 'language_code'." (ej. "es-419", que sí sale en el primer
+     * catálogo). Se marca aparte para que el selector de idioma del
+     * proyecto pueda restringirse solo a los códigos que no rompen el
+     * enriquecimiento de volumen ni las ideas de keywords.
+     */
+    private function syncGoogleAdsKeywordLanguages(DataForSeoClient $client): void
+    {
+        $this->info('Sincronizando idiomas de keywords_data/google_ads/languages...');
+
+        $rows = $this->firstTaskResult($client->get('keywords_data/google_ads/languages'));
+
+        Language::query()->update(['valid_for_google_ads_keywords' => false]);
+
+        Language::query()
+            ->whereIn('language_code', $rows->pluck('language_code'))
+            ->update(['valid_for_google_ads_keywords' => true]);
+
+        $this->info("Idiomas válidos para keywords_data/google_ads: {$rows->count()}.");
     }
 
     private function syncLocations(DataForSeoClient $client): void

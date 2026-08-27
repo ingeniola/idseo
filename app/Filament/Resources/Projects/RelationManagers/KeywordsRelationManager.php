@@ -102,7 +102,7 @@ class KeywordsRelationManager extends RelationManager
     {
         return Select::make('language_code')
             ->label(__('keywords.fields.language_code'))
-            ->options(fn () => Language::query()->orderBy('language_name')->pluck('language_name', 'language_code'))
+            ->options(fn () => Language::query()->where('valid_for_google_ads_keywords', true)->orderBy('language_name')->pluck('language_name', 'language_code'))
             ->searchable()
             ->required();
     }

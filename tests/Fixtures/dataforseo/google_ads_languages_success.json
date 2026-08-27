@@ -1,0 +1,24 @@
+{
+    "version": "0.1.20250101",
+    "status_code": 20000,
+    "status_message": "Ok.",
+    "time": "0.1 sec.",
+    "cost": 0,
+    "tasks_count": 1,
+    "tasks_error": 0,
+    "tasks": [
+        {
+            "id": "08251234-1535-0066-0000-9c1a2f3e4b5f",
+            "status_code": 20000,
+            "status_message": "Ok.",
+            "time": "0.05 sec.",
+            "cost": 0,
+            "result_count": 1,
+            "path": ["v3", "keywords_data", "google_ads", "languages"],
+            "data": {"api": "keywords_data", "function": "languages", "se": "google_ads"},
+            "result": [
+                {"language_name": "Spanish", "language_code": "es"}
+            ]
+        }
+    ]
+}

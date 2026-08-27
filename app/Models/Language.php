@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property string $language_code
  * @property string $language_name
+ * @property bool $valid_for_google_ads_keywords
  */
 class Language extends Model
 {
@@ -26,5 +27,13 @@ class Language extends Model
     protected $fillable = [
         'language_code',
         'language_name',
+        'valid_for_google_ads_keywords',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'valid_for_google_ads_keywords' => 'boolean',
+        ];
+    }
 }

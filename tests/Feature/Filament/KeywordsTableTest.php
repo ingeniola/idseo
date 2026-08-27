@@ -8,9 +8,11 @@ use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\RelationManagers\KeywordsRelationManager;
 use App\Models\DataForSeoTask;
 use App\Models\Keyword;
+use App\Models\Language;
 use App\Models\Project;
 use App\Models\Ranking;
 use App\Models\User;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -146,6 +148,20 @@ test('no muestra procesando si la tarea de rank tracking ya se completo', functi
 
     mountKeywordsRelationManager($project)
         ->assertTableColumnFormattedStateSet('latestRanking.position', null, $keyword);
+});
+
+test('el selector de idioma para agregar keywords solo ofrece idiomas validos para keywords_data/google_ads', function () {
+    $project = Project::factory()->create();
+    Language::query()->create(['language_code' => 'es', 'language_name' => 'Spanish', 'valid_for_google_ads_keywords' => true]);
+    Language::query()->create(['language_code' => 'es-419', 'language_name' => 'Spanish (Latin America)', 'valid_for_google_ads_keywords' => false]);
+
+    mountKeywordsRelationManager($project)
+        ->mountTableAction('create')
+        ->assertFormFieldExists(
+            'language_code',
+            fn (Select $field) => array_key_exists('es', $field->getOptions())
+                && ! array_key_exists('es-419', $field->getOptions()),
+        );
 });
 
 test('la accion ver evolucion abre sin errores', function () {

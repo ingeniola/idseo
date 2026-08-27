@@ -22,6 +22,7 @@ function fakeLocationsAndLanguages(): void
 {
     Http::fake([
         '*/serp/google/languages' => Http::response(dataForSeoLocationsFixture('languages_success'), 200),
+        '*/keywords_data/google_ads/languages' => Http::response(dataForSeoLocationsFixture('google_ads_languages_success'), 200),
         '*/serp/google/locations*' => Http::response(dataForSeoLocationsFixture('locations_success'), 200),
     ]);
 }
@@ -32,7 +33,9 @@ test('sincroniza idiomas y ubicaciones, incluyendo parent_code aunque el hijo ll
     $this->artisan('dataforseo:sync-locations')->assertExitCode(0);
 
     expect(Language::query()->count())->toBe(2)
-        ->and(Language::query()->find('es')->language_name)->toBe('Spanish');
+        ->and(Language::query()->find('es')->language_name)->toBe('Spanish')
+        ->and(Language::query()->find('es')->valid_for_google_ads_keywords)->toBeTrue()
+        ->and(Language::query()->find('en')->valid_for_google_ads_keywords)->toBeFalse();
 
     expect(Location::query()->count())->toBe(4);
 
@@ -48,6 +51,18 @@ test('sincroniza idiomas y ubicaciones, incluyendo parent_code aunque el hijo ll
         ->and($unitedStates->country_iso_code)->toBe('US');
 });
 
+test('un idioma que sale del catalogo de google_ads en un re-sync pierde el flag valid_for_google_ads_keywords', function () {
+    Language::query()->create(['language_code' => 'es', 'language_name' => 'Spanish', 'valid_for_google_ads_keywords' => false]);
+    Language::query()->create(['language_code' => 'en', 'language_name' => 'English', 'valid_for_google_ads_keywords' => true]);
+
+    fakeLocationsAndLanguages();
+
+    $this->artisan('dataforseo:sync-locations')->assertExitCode(0);
+
+    expect(Language::query()->find('es')->valid_for_google_ads_keywords)->toBeTrue()
+        ->and(Language::query()->find('en')->valid_for_google_ads_keywords)->toBeFalse();
+});
+
 test('correr el comando dos veces no duplica filas (upsert)', function () {
     fakeLocationsAndLanguages();
 
@@ -61,6 +76,7 @@ test('correr el comando dos veces no duplica filas (upsert)', function () {
 test('un parent_code que no existe en el catálogo devuelto se guarda como null en vez de tronar', function () {
     Http::fake([
         '*/serp/google/languages' => Http::response(dataForSeoLocationsFixture('languages_success'), 200),
+        '*/keywords_data/google_ads/languages' => Http::response(dataForSeoLocationsFixture('google_ads_languages_success'), 200),
         '*/serp/google/locations*' => Http::response(dataForSeoLocationsFixture('locations_with_orphaned_parent'), 200),
     ]);
 
@@ -80,6 +96,7 @@ test('un parent_code que no existe en el catálogo devuelto se guarda como null 
 test('el flag --country filtra el endpoint de ubicaciones', function () {
     Http::fake([
         '*/serp/google/languages' => Http::response(dataForSeoLocationsFixture('languages_success'), 200),
+        '*/keywords_data/google_ads/languages' => Http::response(dataForSeoLocationsFixture('google_ads_languages_success'), 200),
         '*/serp/google/locations/HN' => Http::response(dataForSeoLocationsFixture('locations_success'), 200),
     ]);
 

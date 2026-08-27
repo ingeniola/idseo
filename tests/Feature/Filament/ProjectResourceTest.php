@@ -3,9 +3,13 @@
 declare(strict_types=1);
 
 use App\Enums\UserRole;
+use App\Filament\Resources\Projects\Pages\CreateProject;
+use App\Models\Language;
 use App\Models\Project;
 use App\Models\User;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -43,6 +47,20 @@ test('la pagina de edicion de proyecto carga con la seccion de keywords', functi
     $this->actingAs($admin)
         ->get("/admin/projects/{$project->id}/edit")
         ->assertSuccessful();
+});
+
+test('el selector de idioma del proyecto solo ofrece idiomas validos para keywords_data/google_ads', function () {
+    $admin = User::factory()->create(['role' => UserRole::Admin]);
+    Language::query()->create(['language_code' => 'es', 'language_name' => 'Spanish', 'valid_for_google_ads_keywords' => true]);
+    Language::query()->create(['language_code' => 'es-419', 'language_name' => 'Spanish (Latin America)', 'valid_for_google_ads_keywords' => false]);
+
+    Livewire::actingAs($admin)
+        ->test(CreateProject::class)
+        ->assertFormFieldExists(
+            'default_language_code',
+            fn (Select $field) => array_key_exists('es', $field->getOptions())
+                && ! array_key_exists('es-419', $field->getOptions()),
+        );
 });
 
 test('la pagina de edicion de proyecto incluye la grafica de visibilidad agregada', function () {
