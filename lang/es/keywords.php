@@ -67,4 +67,14 @@ return [
         'partial_failure' => ':updated de :requested keyword(s) actualizadas. DataForSEO rechazó el resto: :errors',
         'rate_limited' => 'Demasiados intentos seguidos. Espera :seconds segundos antes de volver a intentarlo.',
     ],
+
+    'track_now' => [
+        'action' => 'Rastrear ahora',
+        'modal_heading' => 'Rastrear posición ahora',
+        'modal_description_with_estimate' => 'Se va a chequear la posición actual de :count keyword(s) seleccionadas ahora mismo, fuera de la frecuencia normal del proyecto. Costo estimado: :cost (:count keyword(s), tarifa Standard por keyword). El costo real queda registrado en el ledger de costos. El resultado tarda unos minutos en llegar — la columna de Posición muestra "Procesando…" mientras tanto.',
+        'modal_description_without_estimate' => 'Se va a chequear la posición actual de :count keyword(s) seleccionadas ahora mismo, fuera de la frecuencia normal del proyecto. No hay un costo estimado configurado (DATAFORSEO_RANK_TRACKING_STANDARD_COST_ESTIMATE_PER_KEYWORD); el costo real queda registrado en el ledger de costos. El resultado tarda unos minutos en llegar — la columna de Posición muestra "Procesando…" mientras tanto.',
+        'submit' => 'Rastrear',
+        'dispatched' => 'Rastreo enviado para :count keyword(s). Los resultados aparecerán en unos minutos.',
+        'rate_limited' => 'Demasiados intentos seguidos. Espera :seconds segundos antes de volver a intentarlo.',
+    ],
 ];

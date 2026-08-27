@@ -232,6 +232,7 @@ class KeywordsRelationManager extends RelationManager
             ])
             ->toolbarActions([
                 self::enrichVolumeBulkAction(),
+                self::trackNowBulkAction(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
@@ -472,6 +473,69 @@ class KeywordsRelationManager extends RelationManager
 
                 Notification::make()
                     ->title(__('keywords.enrich.success', ['updated' => $result->updated, 'requested' => $result->requested]))
+                    ->success()
+                    ->send();
+            })
+            ->deselectRecordsAfterCompletion();
+    }
+
+    /**
+     * "Rastrear ahora" (sección 6 del SPEC): fuerza un chequeo de
+     * posición fuera de la cadencia normal de la frecuencia del
+     * proyecto (1/7/30 días vía DueKeywordsFinder) — para el día en
+     * que alguien necesita ver el dato ya, no esperar al próximo
+     * corte. A diferencia del disparo automático al crear una keyword
+     * (TrackKeywordsNow en el alta individual / pegado masivo /
+     * importación CSV), este SÍ es gasto adicional real y deliberado,
+     * así que lleva la misma protección de rate-limit + auditoría que
+     * "Enriquecer volumen".
+     */
+    private static function trackNowBulkAction(): BulkAction
+    {
+        return BulkAction::make('trackNow')
+            ->label(__('keywords.track_now.action'))
+            ->requiresConfirmation()
+            ->modalHeading(__('keywords.track_now.modal_heading'))
+            ->modalDescription(function (Collection $records) {
+                $estimate = config('dataforseo.rank_tracking_standard_cost_estimate_per_keyword');
+
+                return filled($estimate)
+                    ? __('keywords.track_now.modal_description_with_estimate', [
+                        'count' => $records->count(),
+                        'cost' => '$'.number_format((float) $estimate * $records->count(), 4),
+                    ])
+                    : __('keywords.track_now.modal_description_without_estimate', ['count' => $records->count()]);
+            })
+            ->modalSubmitActionLabel(__('keywords.track_now.submit'))
+            ->action(function (Collection $records) {
+                $rateLimitKey = 'track-now:'.auth()->id();
+                $maxAttempts = (int) config('cost_control.paid_action_rate_limit.max_attempts');
+                $decaySeconds = (int) config('cost_control.paid_action_rate_limit.decay_seconds');
+
+                if (RateLimiter::tooManyAttempts($rateLimitKey, $maxAttempts)) {
+                    Notification::make()
+                        ->title(__('keywords.track_now.rate_limited', ['seconds' => RateLimiter::availableIn($rateLimitKey)]))
+                        ->danger()
+                        ->send();
+
+                    return;
+                }
+
+                RateLimiter::hit($rateLimitKey, $decaySeconds);
+
+                /** @var Collection<int, Keyword> $keywords */
+                $keywords = $records;
+
+                app(AuditLogger::class)->log(
+                    AuditEvent::PaidActionTriggered,
+                    user: auth()->user(),
+                    context: ['action' => 'track_now', 'keyword_count' => $keywords->count()],
+                );
+
+                TrackKeywordsNow::dispatch($keywords->pluck('id')->all());
+
+                Notification::make()
+                    ->title(__('keywords.track_now.dispatched', ['count' => $keywords->count()]))
                     ->success()
                     ->send();
             })

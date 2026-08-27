@@ -9,6 +9,7 @@ use App\Models\Keyword;
 use App\Models\Project;
 use App\RankTracking\PostRankTrackingTasks;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -91,4 +92,36 @@ test('ignora keywords inactivas', function () {
 
     Http::assertNothingSent();
     expect(DataForSeoTask::query()->count())->toBe(0);
+});
+
+test('no duplica el envio si la keyword ya tiene una tarea de rank tracking pendiente en vuelo', function () {
+    config(['rank_tracking.webhook_token' => 'test-token']);
+
+    $project = Project::factory()->create();
+    $conPendiente = Keyword::factory()->create(['project_id' => $project->id, 'is_active' => true]);
+    $sinPendiente = Keyword::factory()->create(['project_id' => $project->id, 'is_active' => true]);
+
+    DataForSeoTask::factory()->create([
+        'taskable_type' => Keyword::class,
+        'taskable_id' => $conPendiente->id,
+        'endpoint' => PostRankTrackingTasks::ENDPOINT,
+        'status' => DataForSeoTaskStatus::Pending,
+    ]);
+
+    Http::fake([
+        '*/serp/google/organic/task_post' => Http::response(fakeTaskPostResponseFor(['task-solo-sin-pendiente']), 200),
+    ]);
+
+    app(TrackKeywordsNow::class, ['keywordIds' => [$conPendiente->id, $sinPendiente->id]])->handle(app(PostRankTrackingTasks::class));
+
+    Http::assertSentCount(1);
+
+    $sentPayload = null;
+    Http::assertSent(function (Request $request) use (&$sentPayload) {
+        $sentPayload = $request->data();
+
+        return true;
+    });
+
+    expect($sentPayload)->toHaveCount(1);
 });

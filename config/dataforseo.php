@@ -67,6 +67,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Estimación de costo — rastrear ahora (Standard, por keyword)
+    |--------------------------------------------------------------------------
+    |
+    | serp/google/organic/task_post (sección 6 del SPEC). A diferencia
+    | de las estimaciones "Live" de arriba (una tarifa fija por
+    | llamada sin importar cuántas keywords), Standard cobra por
+    | keyword — el botón "Rastrear ahora" del proyecto puede disparar
+    | cualquier número de keywords seleccionadas, así que aquí el
+    | costo mostrado en la UI es el estimado POR KEYWORD, multiplicado
+    | por la cantidad seleccionada. No se encontró un precio
+    | confirmado en la documentación pública disponible al construir
+    | este módulo — llenar con el precio real de la cuenta antes de
+    | usarlo en producción.
+    |
+    */
+
+    'rank_tracking_standard_cost_estimate_per_keyword' => env('DATAFORSEO_RANK_TRACKING_STANDARD_COST_ESTIMATE_PER_KEYWORD'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Estimación de costo — investigación de keywords (Labs, Live)
     |--------------------------------------------------------------------------
     |
