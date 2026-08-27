@@ -58,6 +58,25 @@ test('correr el comando dos veces no duplica filas (upsert)', function () {
         ->and(Language::query()->count())->toBe(2);
 });
 
+test('un parent_code que no existe en el catálogo devuelto se guarda como null en vez de tronar', function () {
+    Http::fake([
+        '*/serp/google/languages' => Http::response(dataForSeoLocationsFixture('languages_success'), 200),
+        '*/serp/google/locations*' => Http::response(dataForSeoLocationsFixture('locations_with_orphaned_parent'), 200),
+    ]);
+
+    $this->artisan('dataforseo:sync-locations')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('1 ubicaciones con parent_code huérfano');
+
+    expect(Location::query()->count())->toBe(2);
+
+    $franciscoMorazan = Location::query()->find(20174);
+    $honduras = Location::query()->find(2340);
+
+    expect($franciscoMorazan->parent_code)->toBeNull()
+        ->and($honduras->parent_code)->toBeNull();
+});
+
 test('el flag --country filtra el endpoint de ubicaciones', function () {
     Http::fake([
         '*/serp/google/languages' => Http::response(dataForSeoLocationsFixture('languages_success'), 200),

@@ -82,6 +82,16 @@ class DataForSeoSyncLocationsCommand extends Command
             'parent_code' => $row['location_code_parent'] ?? null,
         ];
 
+        // DataForSEO incluye ubicaciones cuyo location_code_parent
+        // apunta a un location_code que no aparece en ninguna otra fila
+        // de esta misma respuesta (referencia huérfana del lado de
+        // DataForSEO, no un bug de paginación nuestro). Solo los
+        // location_code presentes en $rows quedan insertados tras la
+        // primera pasada, así que cualquier parent_code fuera de ese
+        // conjunto violaría la FK — se descarta a null en vez de
+        // tronar el comando completo.
+        $knownCodes = $rows->pluck('location_code')->flip();
+
         // Primera pasada sin parent_code: si un hijo llegara antes que
         // su padre dentro del mismo chunk, insertarlo ya con
         // parent_code violaría la FK autoreferenciada.
@@ -94,18 +104,32 @@ class DataForSeoSyncLocationsCommand extends Command
         );
 
         // Segunda pasada: ahora que todos los location_code ya existen,
-        // setear parent_code es seguro sin importar el orden del lote.
-        // SQLite exige que el VALUES de un upsert satisfaga las
-        // columnas NOT NULL aunque el conflicto las descarte, así que
-        // se manda la fila completa otra vez y solo se actualiza
-        // parent_code.
+        // setear parent_code es seguro sin importar el orden del lote,
+        // salvo las referencias huérfanas descartadas arriba. SQLite
+        // exige que el VALUES de un upsert satisfaga las columnas NOT
+        // NULL aunque el conflicto las descarte, así que se manda la
+        // fila completa otra vez y solo se actualiza parent_code.
+        $orphanedParents = 0;
         $rows->chunk(self::CHUNK_SIZE)->each(
-            fn (Collection $chunk) => Location::query()->upsert(
-                $chunk->map($toRow)->all(),
-                ['location_code'],
-                ['parent_code'],
-            )
+            function (Collection $chunk) use ($toRow, $knownCodes, &$orphanedParents) {
+                $mapped = $chunk->map(function (array $row) use ($toRow, $knownCodes, &$orphanedParents) {
+                    $row = $toRow($row);
+
+                    if ($row['parent_code'] !== null && ! $knownCodes->has($row['parent_code'])) {
+                        $orphanedParents++;
+                        $row['parent_code'] = null;
+                    }
+
+                    return $row;
+                })->all();
+
+                Location::query()->upsert($mapped, ['location_code'], ['parent_code']);
+            }
         );
+
+        if ($orphanedParents > 0) {
+            $this->warn("{$orphanedParents} ubicaciones con parent_code huérfano (no existe en el catálogo devuelto por DataForSEO) se guardaron sin padre.");
+        }
 
         $this->info("Ubicaciones sincronizadas: {$rows->count()}.");
     }
