@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "emcp-webs27-online": {
+      "type": "http",
+      "url": "https://webs27.online/prueba2/index.php?rest_route=/mcp/emcp-tools-server",
+      "headers": {
+        "Authorization": "${EMCP_WEBS27_ONLINE_AUTH}"
+      }
+    }
+  }
+}
