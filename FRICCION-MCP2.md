@@ -1392,3 +1392,108 @@ correcto. Queda en la base de datos el `envato_tk_manifest` del kit con las URLs
 
 Sigue pendiente lo único que no puedo hacer con herramientas: **terminar el asistente de
 Rank Math en wp-admin** para que el SEO escrito se emita.
+
+---
+
+# Fase 9 — Buscar el inglés por palabras no funciona, y por qué
+
+Tú viste botones en inglés en `/maquinaria/bulldozers/` después de que yo diera el sitio por
+barrido en la fase 7. Tenías razón, y el fallo no es de descuido: es **de método**.
+
+## G El barrido por palabras es estructuralmente incapaz
+
+En la fase 7 recorrí las 21 páginas buscando `elementor_find(texto: …)` con las palabras
+que me parecían delatoras del kit: `Rent`, `the`, `Our`, `Project`, `Customer`, `Equip`,
+`Service`, `Melbourne`, `+61`, `rentforge`. Dio cero en las fichas y lo di por limpio.
+
+Lo que había en las ocho fichas:
+
+```
+Get a Free Quote
+Talk to an Expert
+```
+
+**Ninguna de las diez palabras que busqué aparece en esas dos frases.** No es mala suerte:
+es que el método sólo encuentra lo que ya sospechas, y una frase corriente en inglés no
+tiene por qué contener ninguna palabra «sospechosa». Con dieciséis botones repartidos por
+ocho páginas y el resto del sitio en español, el barrido me devolvió cero y yo leí ese cero
+como «no queda nada». Es el peor tipo de falso negativo: uno que tranquiliza.
+
+Y lo anoto con más motivo porque la ironía es doble. El encargo decía, sobre
+`elementor_text_audit`: *«Acabo de corregirle un fallo: descartaba las etiquetas de botón de
+una sola palabra»*. Es decir, el propio plugin ya había tenido este problema exacto —perder
+etiquetas de botón— y lo había arreglado. La herramienta que existe precisamente para esto
+sigue rota (fase 0 y fase 7), yo improvisé un sustituto peor, y el sustituto falló justo
+donde el original ya sabía que se falla.
+
+## ✅ Lo que sí funciona: leer el texto renderizado
+
+```
+content_render(post_id: 202, alcance: "pagina", texto: true)
+```
+
+Devuelve **el texto que lee una persona**, de la cabecera al pie, sin marcado. No depende de
+qué tipo de widget guarde cada trozo, que es exactamente donde se me escapaban las cosas:
+en la fase 7 fueron `icon-list`, `counter` y `google_maps`; en ésta, `button`.
+
+Lo pasé por las nueve plantillas distintas del sitio. Una página son unas 600–900 palabras,
+así que **el sitio entero cabe en nueve llamadas**. Debería haber sido mi primera
+herramienta de verificación, no la última.
+
+Lo que encontró, aparte de los dieciséis botones:
+
+1. **Iconos sociales de mentira en cabecera y pie.** Twitter, Facebook, **Google Plus**
+   —cerrado en 2019—, YouTube y Pinterest, y **ninguno con enlace**: el kit los deja
+   apuntando a nada. En una web de alquiler de maquinaria, además, Pinterest no pinta nada.
+   Cambiados a LinkedIn, Facebook, YouTube y WhatsApp, los cuatro con su enlace.
+2. **Dos direcciones distintas para la misma oficina.** Contacto decía *«calle Trebolar
+   44»* y el pie, el aviso legal y la política de privacidad decían *«calle Alaún 24»*.
+   Las escribí yo, en fases distintas, sin releer lo anterior. Unificado en Alaún 24 y
+   **fijado en `ENCARGO-ALTORRE.md`** para que no vuelva a divergir: el problema no era la
+   dirección, era no tener una fuente única.
+3. **Migas de pan inconsistentes**: en Contacto faltaba el separador `~` que llevan las
+   otras veinte páginas.
+4. **La sección «Guías de máquina y consejos de obra» vacía en las ocho fichas**: el
+   titular sin nada debajo, otro contenedor huérfano del kit (fase 7, entrada A/B). Añadido
+   el widget `posts` en las ocho.
+
+Los cuatro son el mismo tipo de fallo: cosas que se ven de un vistazo leyendo la página y
+que no se ven mirando el JSON widget a widget.
+
+## 🔧 Un apaño que sí salió bien: localizar contenedores vacíos con SQL
+
+Para meter el listado de entradas en las ocho fichas necesitaba el id del contenedor vacío
+de cada una. `elementor_outline` lo da, pero son 2.500 tokens por página y ocho páginas.
+Como los contenedores vacíos no tienen texto, `elementor_find` no los encuentra.
+
+Salida: el contenedor vacío es siempre el elemento que sigue al titular en el JSON, así que
+una sola consulta lo saca de las siete páginas a la vez:
+
+```sql
+SELECT post_id,
+       LEFT(SUBSTRING_INDEX(SUBSTRING_INDEX(
+              SUBSTRING_INDEX(meta_value, 'consejos de obra', -1),
+              CONCAT('{', CHAR(34), 'id', CHAR(34), ':', CHAR(34)), 2),
+              CONCAT('{', CHAR(34), 'id', CHAR(34), ':', CHAR(34)), -1), 7)
+FROM xXInS_postmeta WHERE meta_key = '_elementor_data' AND post_id IN (203,...,209)
+```
+
+Una llamada en vez de siete `elementor_outline`. Lo anoto porque es el hueco de siempre:
+**no hay forma de pedir un elemento por su ruta.** `elementor_find` devuelve `ruta` en cada
+resultado —`"ruta":"6.1"`— pero no acepta `ruta` como criterio de búsqueda. Si lo aceptara,
+esto sería una llamada tool-native en vez de una consulta SQL de tres niveles.
+
+## Lo que cambio en mi método a partir de aquí
+
+1. **`content_render(texto: true)` sobre cada plantilla distinta antes de decir «terminado».**
+   No al final: antes de decirlo.
+2. El barrido por palabras vale para **confirmar** que algo concreto desapareció, nunca para
+   **descartar** que quede algo.
+3. Cuando el encargo fija un dato —una dirección, un teléfono, un precio— va al fichero del
+   encargo la primera vez que lo invento, no la tercera vez que lo escribo distinto.
+
+## Estado
+
+Nueve plantillas leídas de principio a fin. **Cero inglés en el sitio.** Los dieciséis
+botones, los iconos sociales, la dirección, las migas y las ocho secciones de blog vacías,
+corregidos.

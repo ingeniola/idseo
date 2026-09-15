@@ -17,8 +17,17 @@ Empezaron con dos retroexcavadoras y una góndola de segunda mano.
 Hoy, 2026: **17 años**, **54 personas**, **9 mecánicos en plantilla**, **6 transportistas con
 góndola propia**, **214 máquinas** en flota.
 
-**Sedes:** Zaragoza (Plataforma Logística PLAZA, central) · Pamplona (Polígono Landaben) ·
-Lleida (Polígono El Segre). **Base móvil** en Teruel.
+**Sedes** (direcciones fijadas, no inventar otras):
+- Zaragoza, central — Plataforma Logística PLAZA, calle Alaún 24, 50197 Zaragoza
+- Pamplona — Polígono Landaben, calle F nave 12
+- Lleida — Polígono El Segre, calle 401 nave 7
+- Base móvil en Teruel
+
+**Datos fiscales (ficticios, sustituir antes de publicar de verdad):** NIF B-99123456 ·
+Registro Mercantil de Zaragoza, tomo 3.412, folio 118, hoja Z-71.905.
+
+**Redes (perfiles ficticios):** LinkedIn `company/altorre-maquinaria` · Facebook
+`altorremaquinaria` · YouTube `@altorremaquinaria` · WhatsApp `wa.me/34640221890`.
 **Cobertura:** Aragón, Navarra, La Rioja, Cataluña occidental, Soria y Guadalajara.
 
 **Contacto:** +34 976 500 180 · WhatsApp +34 640 22 18 90 · alquiler@altorremaquinaria.es
