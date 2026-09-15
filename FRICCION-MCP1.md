@@ -816,3 +816,34 @@ tal como venía: son decisión del cliente, no mía. Los que siguen largos:
 `/servicios/tala-de-arboles/` (64), `/servicios/sistemas-de-riego/` (62),
 `/servicios/mantenimiento-de-jardines/` (61), `/servicios/fertilizacion-y-suelos/` (61),
 `/servicios/limpieza-de-terrenos/` (61).
+
+## Fase 7 — Logo
+
+### A — No hay forma de subir un fichero a la biblioteca de medios
+
+**Qué quería:** subir los cuatro logos de la marca (horizontal negro, horizontal blanco,
+isotipo y versión apilada) que el cliente me pasó, y aplicarlos en cabecera, pie y favicon.
+
+**La única herramienta de subida es `media_upload`:**
+> "Descarga un fichero desde una **URL pública** y lo añade a la biblioteca de medios,
+> generando los tamaños intermedios."
+
+Su único parámetro obligatorio es `url`, con `http://` o `https://`. **No acepta bytes, ni
+base64, ni una ruta del servidor.**
+
+**Qué hice:** nada, de momento está bloqueado por otro motivo (los logos me llegaron dentro de
+la conversación, no como ficheros en disco, así que tampoco tengo los bytes). Pero merece la
+pena anotar el hueco aunque los tuviera.
+
+**Mi lectura:** **hueco de diseño, y llamativo por lo que sí existe al lado.** El servidor
+tiene `file_write`, que escribe ficheros dentro de `wp-content` — incluido `uploads/`. O sea:
+**puedo dejar el fichero en el disco pero no puedo convertirlo en un adjunto de WordPress**,
+que es lo que hace falta para que tenga ID, miniaturas y se pueda usar como logo, imagen
+destacada o en un widget. Falta el puente: o `media_upload` acepta `contenido_base64` o
+`ruta` además de `url`, o hay un `media_register(ruta)` que registre como adjunto algo que ya
+está en `uploads/`.
+
+Es un caso claro de "el servidor sabe hacer las dos mitades y no sabe unirlas", igual que
+`elementor_template_import`, que sabe importar plantillas pero no leerlas de disco. El patrón
+se repite: **todo lo que entra al sitio tiene que pasar por el contexto del modelo o por una
+URL pública**, y los dos caminos fallan justo con lo que más pesa — kits, imágenes, medios.
