@@ -1835,3 +1835,108 @@ el proyecto después de la economía de contexto.
 Un dato a favor del plugin: los textos alternativos que puse en la fase 12 habrían bastado
 para distinguirlas, si los hubiera consultado. `media_get` existe y los devuelve. No lo
 pensé.
+
+---
+
+# Fase 16 — No puedo ver la página renderizada (el caso, entero)
+
+**Esta entrada llega tarde y eso es en sí mismo un dato.** El asunto salió en la fase 4,
+cuando se preguntó si se podían hacer capturas de pantalla. Lo investigué, contesté que no y
+seguí trabajando. Quedó mencionado de pasada en dos sitios —dos frases en el cierre y un
+párrafo en la fase 14— pero **nunca lo escribí como caso, con su llamada y su respuesta
+literal**, que es justo lo que pide el encargo. El instinto de «rodearlo y seguir» me ganó
+aquí, en la limitación más importante de todo el proyecto. Lo escribo ahora completo.
+
+## A No hay forma de ver cómo se ve una página
+
+**Qué quería hacer:** mirar la página. Una captura de pantalla, o cualquier cosa que me diga
+que lo que acabo de maquetar se ve como debe verse.
+
+**Lo que hay en el contenedor:** Chromium preinstalado y Playwright configurado para
+encontrarlo (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`). O sea que el navegador está.
+
+**Llamada:**
+```
+curl -sS -o /dev/null -w "http=%{http_code}\n" --max-time 10 https://mcp1.webs27.online/
+```
+
+**Respuesta (comprobada de nuevo hoy, sigue igual):**
+```
+curl: (56) CONNECT tunnel failed, response 403
+http=000
+```
+
+El proxy del entorno contesta 403 al CONNECT hacia `mcp1.webs27.online:443`. El navegador
+está, pero no puede llegar al sitio. Cualquier ruta que pase por «abrir la URL» está cerrada.
+
+**Qué hice:** verificar siempre por el HTML, pidiéndole al **sitio que se descargue a sí
+mismo**:
+```php
+wp_remote_get(get_permalink($id))   // dentro de ingenio_execute_php
+```
+Esto sí funciona, porque la petición sale del servidor de WordPress, no de mi contenedor. Es
+como he comprobado las 33 páginas: código 200, número de palabras, ausencia de inglés,
+enlaces vacíos, elementos de Elementor presentes. Todo el proyecto se ha verificado así.
+
+**Coste:** imposible de contar en llamadas, porque no es un coste de llamadas. Es un coste de
+**clase de error**: hay una familia entera de fallos que este método no ve.
+
+## Lo que esta ceguera dejó pasar, con nombre y apellidos
+
+No es teórico. Tres cosas se publicaron mal y las tres pasaron mi verificación:
+
+1. **El mega menú de la fase 14.** Conté 8 entradas, 23 enlaces, 0 vacíos. Pasó. Y estaba
+   roto en tres sitios a la vez: el panel a pantalla completa, las cuatro columnas apiladas y
+   el menú partido en dos líneas. **Lo cazó una captura de pantalla del cliente.**
+2. **El pie en inglés en 32 páginas** (fase 10). Ahí el fallo fue mío —recortaba el HTML
+   justo antes del pie— pero un solo vistazo a cualquier página lo habría enseñado.
+3. **La imagen decorativa del pie enlazada por error** (fase 15). Dos imágenes, la misma
+   forma en el árbol, ninguna manera de mirarlas.
+
+El patrón es claro: **verificar por HTML detecta contenido y estructura; no detecta
+maquetación.** Y en un sitio hecho con un kit comprado, donde casi ninguna sección se usa
+para lo que el kit creía, la maquetación es justo donde está el riesgo.
+
+## ¿Se podría rodear? Sí, y no compensa
+
+Lo pensé y lo descarto con números, no por pereza:
+
+- **Reconstruir la página en local y capturarla con el Chromium que tengo.** Haría falta
+  traerme el HTML (que sí puedo) más todo el CSS, las fuentes y las imágenes, y todo eso vive
+  en `mcp1.webs27.online`, que está bloqueado. Tendría que pasarlo por `ingenio_execute_php`
+  en base64, igual que hice con la miniatura del logo en la fase 7. Sólo el CSS de la
+  cabecera son 27 KB; la página entera con Elementor, ElementsKit y Jeg Kit anda por el
+  megabyte. Son cientos de miles de tokens **por página**. Es la misma pared que con las
+  imágenes.
+- **Un servicio público de capturas.** Bloqueado por el mismo proxy, y además implicaría
+  mandar la URL del sitio a un tercero.
+
+Así que la respuesta honesta es la que pide la regla 2 del encargo: **esto no se puede con
+las herramientas que tengo.** No hay heroicidad que lo disimule.
+
+## Mi lectura
+
+**El 403 es del entorno, no del plugin.** Es la política de red de este contenedor y hace
+bien en ser restrictiva. No lo apunto para culpar al servidor MCP.
+
+**Pero el servidor sí podría tapar el hueco, y no lo hace.** Tiene 161 herramientas, entre
+ellas `site_performance`, `seo_audit`, `content_render` y `content_analyze`, todas del lado
+del servidor. Le falta la que convierte a un agente en alguien que puede comprobar su
+trabajo:
+
+> **`page_screenshot(post_id, ancho, alto?)`** — que el servidor renderice la página y
+> devuelva una imagen pequeña en base64. Con 600 px de ancho y calidad baja son unas pocas
+> decenas de KB. No hace falta que sea bonita: hace falta poder ver que cuatro columnas están
+> en fila y no apiladas.
+
+El servidor está en el mismo sitio que WordPress, tiene PHP, y hay maneras (un navegador sin
+cabeza si está disponible, o un servicio externo desde el servidor en lugar de desde mi
+contenedor). Es la misma petición que hice en la fase 7 para `media_thumbnail`: **devolver
+píxeles, no metadatos.** Las dos herramientas se parecen tanto que probablemente sean la
+misma pieza de infraestructura.
+
+Sin eso, el reparto de trabajo real de este proyecto ha sido: yo escribo y compruebo el
+contenido, y **un humano mira la pantalla y me dice qué está torcido.** Funciona —el mega
+menú se arregló en veinte minutos desde su captura— pero conviene decirlo tal cual, porque
+es lo que de verdad hace falta para trabajar así, y no sale en ninguna descripción de
+herramienta.
