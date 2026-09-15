@@ -1130,3 +1130,114 @@ la primera hora.
 
 Corregido: pie y cabecera enteros en español, con los cinco datos de contacto reales, los
 enlaces a las páginas que existen y el botón «Cotizar gratis» apuntando a `/cotizacion/`.
+
+---
+
+# Fase 11 — Cobertura, Planes y el hub de Proyectos
+
+## E Leer la estructura de un repetidor cuesta el widget entero
+
+Para reescribir los testimonios, el acordeón de los planes y las listas de características
+necesitaba saber los nombres de las claves de cada fila del repetidor. No hay ninguna
+herramienta que devuelva sólo eso.
+
+**Llamada:** `elementor_element_get` sobre `elementskit-testimonial` (probado en fases
+anteriores) devuelve las ~70 claves de estilo del widget además del repetidor. En esta fase
+ya ni lo intenté: fui directo a `ingenio_execute_php` filtrando a mano.
+
+**Respuesta:** el volcado de una sola fila del repetidor de testimonios ocupa 60 líneas de
+JSON, de las cuales 5 son contenido (`client_name`, `designation`, `review`, `rating`,
+`client_photo`) y 55 son ajustes de fondo, degradado y *ken burns* que nunca voy a tocar.
+
+**Qué hice:** un dumper propio en PHP que recorre el documento y imprime sólo `path`,
+`widgetType` y las claves de texto. Tres páginas completas caben en 60 líneas.
+
+**Coste:** 4 llamadas de reconocimiento antes de poder escribir nada. Con una herramienta
+tipo «dame el esquema de contenido de esta página» habría sido 1.
+
+**Mi lectura:** límite razonable de diseño llevado demasiado lejos. `elementor_element_get`
+hace lo que promete. Lo que falta es el modo «sólo contenido»: un `elementor_outline` que,
+además de la jerarquía, traiga el texto de cada widget. La herramienta `elementor_outline`
+existe y da la jerarquía; añadirle un parámetro `con_texto` costaría poco y ahorraría la
+mitad de mis llamadas de lectura en todo el proyecto.
+
+## G Insertar un elemento desplaza todas las rutas hermanas y nada te avisa
+
+Las tres plantillas (Our Team, Pricing, Projects) no traen ningún hueco de texto entre el
+H1 y la rejilla de tarjetas. El encargo sí tiene ahí dos o tres párrafos de intro. Inserté
+un `text-editor` como primer hijo del contenedor de la sección.
+
+**Llamada:** `array_unshift($x[1]['elements'][0]['elements'], $intro)` dentro de la misma
+llamada PHP que aplicaba los textos por ruta.
+
+**Respuesta:** guardado correcto. Pero en la llamada *siguiente*, para corregir el formato
+de los precios, usé las rutas del mapa que había levantado antes de insertar:
+
+```
+'1.0.0.0.0.1' => ['ekit_heading_title' => 'Desde L 1,200 {{/al mes}}']
+→ aplicados=0
+```
+
+Cero coincidencias, sin error. La rejilla se había movido de `1.0.0` a `1.0.1`.
+
+**Qué hice:** repetir con `1.0.1.*`. `aplicados=3`.
+
+**Coste:** 2 llamadas, una de ellas cara porque verifiqué con una expresión regular sobre
+el HTML entero y me traje 40 KB de CSS y JSON-LD a la conversación. Ese trozo del coste es
+culpa mía, no del plugin: `content_render` con `buscar` hace exactamente eso por 300 bytes.
+
+**Mi lectura:** esto es inherente a direccionar por ruta, y el direccionamiento por ruta lo
+inventé yo porque `elementor_element_update` devuelve treinta veces lo que se le manda
+(anotado en la fase 6). Pero apunta a algo que sí es del plugin: el aplicador por ruta
+devuelve `aplicados=0` y eso no es un error. Un `elementor_element_update` que reciba una
+ruta inexistente debería fallar, no quedarse callado. Cuando escribes 36 ajustes de golpe,
+la diferencia entre 36 y 35 es invisible si nadie la cuenta.
+
+## C La sintaxis `{{/texto}}` de elementskit-heading no está documentada en ninguna parte
+
+El widget `elementskit-heading` de las tarjetas de precio traía `$49 {{/Per Month}}`.
+
+**Llamada:** `elementor_widget_schema` para `elementskit-heading` (fase 6) describe
+`ekit_heading_title` como «título». Nada sobre llaves dobles.
+
+**Qué hice:** deducirlo del contenido de demostración y probar. Renderiza
+`<h3>Desde L 1,200 <span>/al mes</span></h3>`: lo de dentro de las llaves sale en un `span`
+con estilo propio, **incluida la barra**. Mi primer intento, `A medida {{/cotización sin
+costo}}`, salía en pantalla como «A medida /cotización sin costo», que no significa nada.
+Lo dejé en `Cotización a medida` sin sufijo.
+
+**Coste:** 1 llamada extra y un texto raro publicado durante unos minutos.
+
+**Mi lectura:** no es culpa del plugin MCP, es de ElementsKit, que inventa una sintaxis de
+plantilla dentro de un campo de texto plano. Pero sí es un hueco del servidor: cuando
+`elementor_widget_schema` describe un campo de un widget de terceros con sintaxis propia,
+lo único que puede salvarte es que la descripción lo diga. No lo dice. Sin el contenido de
+demostración delante, esas llaves se publican tal cual.
+
+## D Las ocho tarjetas de equipo reconvertidas en sedes: fotos y redes sociales a mano
+
+La plantilla de Cobertura es *Our Team*: ocho tarjetas con retrato de persona de fondo y un
+widget `social-icons` por tarjeta. Jardines del Valle no tiene ocho caras que poner ahí, y
+un retrato con el rótulo «Tegucigalpa» debajo es peor que no poner nada.
+
+**Qué hice:** cambiar el fondo de cada tarjeta (`background_image` en el contenedor
+`1.0.0.{n}.0.0`) a ocho fotos de jardín que ya estaban en la mediateca del kit, y ocultar
+los ocho `social-icons` con `hide_desktop` + `hide_tablet` + `hide_mobile`. Todo por PHP.
+
+**Coste:** ninguna llamada extra respecto a lo que ya iba a hacer, porque lo metí en el
+mismo aplicador por ruta. Pero con herramientas habrían sido 8 `elementor_element_update`
+para los fondos y 8 más para ocultar, con su acuse de recibo cada una.
+
+**Mi lectura:** límite razonable. Reutilizar una plantilla para algo que no es lo que la
+plantilla dice es decisión mía, y ninguna herramienta puede adivinarla. Lo anoto porque es
+el patrón de trabajo real con un kit comprado: casi ninguna sección se usa para lo que el
+kit creía. La herramienta que falta no es «convertir equipo en sedes», es un
+`elementor_element_update` que acepte varias rutas y varios ajustes en una sola llamada y
+conteste con un número, no con el widget entero.
+
+## Estado tras la fase 11
+
+28 de 33 páginas con contenido real. Cobertura (465 palabras), Planes (676) y el hub de
+Proyectos (366) verificados en el front: 200, cero inglés, los tres con su intro, sus
+tarjetas, su bloque de «por qué» y los tres testimonios del encargo. Quedan FAQs, el
+archivo del blog, el cuerpo de las tres legales y la de Gracias.
