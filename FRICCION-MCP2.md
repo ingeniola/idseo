@@ -165,3 +165,180 @@ Testimonials (187).
 
 No importadas a propósito: `coming-soon` y los tres JSON de formularios, porque son de
 MetForm y MetForm no está.
+
+---
+
+# Fase 1 — Estructura, plantillas aplicadas y la medición que se pidió
+
+Gum Addon instalado por el cliente entre fases: los widgets muertos bajan de 12 a **5**
+(sólo los `metform`). Encargo ficticio escrito en `ENCARGO-ALTORRE.md`: Altorre Maquinaria,
+alquiler de maquinaria de obra en Zaragoza, Pamplona y Lleida.
+
+## 📏 La medición: tokens por elemento cambiado
+
+Dos llamadas reales de contenido, no de prueba.
+
+**Llamada A — Contacto (197), 15 elementos:** títulos, textos, migas, tres botones con su
+enlace y el bloque de datos de contacto.
+
+```json
+{"post_id":197,"aplicados":15,
+ "elementos":[{"element_id":"e099dcc","claves":["title"]}, … ],
+ "deshacer":{"revision":208,"como":"history_restore con revision=208 …"}}
+```
+
+**Llamada B — Portada (189), 28 elementos:** los 28 titulares de la home.
+
+| | entrada | respuesta | por elemento |
+|---|---|---|---|
+| A — 15 elementos | ~2.900 car. ≈ 780 tok | 620 car. ≈ **170 tok** | **11,3 tok** |
+| B — 28 elementos | ~2.400 car. ≈ 640 tok | 1.150 car. ≈ **300 tok** | **10,7 tok** |
+
+**Contra la ronda anterior:** en mcp1 medí que cambiar **tres textos de un widget
+elementskit** costaba unas **1.200 palabras de respuesta ≈ 1.600 tokens**, y eso era una
+llamada = un elemento.
+
+> **11 tokens por elemento ahora, contra ~1.600 antes. Unas 145 veces menos.**
+
+Y la parte que no se reduce —la entrada— es el texto que quiero publicar: irreducible por
+definición. El coste total por elemento pasa de ~1.650 tokens a ~64.
+
+**¿A partir de cuántos elementos se hizo incómodo?** No se hizo. La de 28 se compone igual de
+bien que la de 15 y la respuesta sigue cabiendo en un vistazo. El límite que noto no es de
+tamaño sino de **composición**: escribir 28 textos definitivos de golpe obliga a tener la
+página entera decidida antes de empezar, y si me equivoco en un `element_id` no me entero
+hasta leer la lista de `claves` devueltas una por una. Diría que el punto de incomodidad está
+en el orden de los 40–50, y por la redacción, no por el protocolo.
+
+## ¿Habría construido el aplicador en PHP con estos números?
+
+**Para una página, no.** Sin ninguna duda. 28 elementos en una llamada a 11 tokens cada uno
+es mejor que cualquier cosa que yo escriba, y encima trae `deshacer` con su revisión. El
+aplicador por rutas no tendría razón de ser.
+
+**Para las ocho fichas de máquina, sí, todavía.** Y aquí está la evidencia, que esta vez es
+limpia porque las ocho salen de la misma plantilla:
+
+| ruta | ficha 202 | ficha 203 |
+|---|---|---|
+| `0.0` | `500ce29` | `a5c2579` |
+| `1.0` | `b547b05` | `486f4c2` |
+| `2.2.1.1` | `dbcae8c` | `576d6af` |
+| `8.0` | `d96d659` | `1c4d576` |
+
+Mismas rutas, ids distintos —`elementor_template_apply` los regenera a propósito y hace
+bien—. Así que las ocho fichas son 8 × (`elementor_find` + `elementor_element_update`) = **16
+llamadas**, contra **1** del aplicador por rutas.
+
+Pero el margen se ha estrechado tanto que la respuesta honesta tiene matiz: en mcp1 eran 247
+llamadas caras contra una; aquí son 16 llamadas baratas contra una. **Si el encargo fueran
+sólo estas ocho, usaría las herramientas y no bajaría a PHP.** A partir de unas quince
+páginas clonadas volvería a compensar escribirlo.
+
+**Y lo que cerraría el hueco del todo ya casi está hecho.** `elementor_find` **ya responde en
+rutas**:
+
+```json
+{"id":"dbcae8c","widget":"heading","ruta":"2.2.1.1","texto":"Ideal For"}
+```
+
+El servidor tiene el concepto de ruta y lo usa para leer. Lo único que falta es aceptarlo
+para escribir: que `element_id` admita también una `ruta`, o que cada entrada de `cambios`
+pueda llevar su `post_id`. Con cualquiera de las dos, las ocho fichas son una llamada y el
+aplicador en PHP desaparece del todo. Es el mismo patrón que anoté en mcp1 con los medios:
+**las dos mitades existen y no se tocan.**
+
+## ✅ `elementor_template_apply` habilita Elementor, y lo dice
+
+El fallo número uno de todo el registro de mcp1 —escribir `_elementor_data` sin marcar la
+página como Elementor y devolver éxito— está resuelto. Veintiuna páginas aplicadas y las
+veintiuna contestaron:
+
+```json
+{"accion":"contenido añadido al final","elementos":175,
+ "elementor":"habilitado por esta llamada",
+ "deshacer":{"revision":175,…}}
+```
+
+**No llamé a `elementor_enable` ni antes ni después, y no hizo falta.** No sólo lo hace: lo
+declara en la respuesta, que es lo que permite fiarse sin ir a comprobarlo.
+
+## ✅ `batch` es lo que hace que todo esto sea barato
+
+Sin él, esta fase habrían sido 21 creaciones + 21 aplicaciones + 5 opciones + 6 borrados = 53
+llamadas. Fueron **cinco**. Y al fallar se comporta igual de bien que en mcp1: dice en qué
+paso paró, cuántos no se intentaron y que lo anterior se quedó hecho, con su revisión.
+
+## F Una aprobación que salta donde no toca: descartar cero elementos
+
+**Llamada:** `elementor_template_apply(post_id:189, template_id:165, modo:"reemplazar")`
+sobre una página recién creada, vacía.
+
+**Respuesta:**
+
+```
+[approval_required] Se descartan los 0 elementos que tiene la página. Quedan en el
+historial, pero nadie los recupera si no se entera de que se fueron.
+```
+
+**Cero elementos.** La propia puerta cuenta lo que se va a perder, le sale cero, y para
+igual. Reemplazar nada no destruye nada.
+
+**Qué hice:** usar `modo:"anadir"`, que en una página vacía da exactamente el mismo
+resultado. Veintiuna páginas aplicadas sin una sola aprobación.
+
+**Coste:** 1 llamada perdida. Barato, pero el efecto de segundo orden no lo es: **me enseñó a
+esquivar la puerta.** Si mañana aplico «añadir» sobre una página con contenido de verdad,
+duplico el contenido en silencio y nadie me para, porque «añadir» no tiene puerta. La puerta
+correcta habría sido la misma condición con `> 0` delante.
+
+**Mi lectura:** fallo del plugin, de los baratos de arreglar y de los que envenenan. Una
+puerta que salta cuando no hay nada que proteger entrena a saltársela.
+
+## Una aprobación que salta donde SÍ toca (no es fricción, se anota para que conste)
+
+`elementor_template_conditions` con `include/general` pide aprobación, y hace bien: una
+condición general cambia el aspecto de todas las páginas a la vez. En mcp1 el modo de
+aprobaciones estaba en «nunca» y pasaba sin preguntar; aquí está activo y pregunta. El
+mensaje dice el motivo, dice que no se ha cambiado nada y da la URL. Correcto de principio a
+fin.
+
+Quedan tres pendientes de aprobación humana: cabecera (161), pie (163) y 404 (185).
+
+## B El formulario de contacto desapareció por el camino, y nadie avisó
+
+`contact.json` del kit trae un widget `metform`. Al importar, la respuesta dijo
+`"elementos":36`. El `elementor_outline` de esa misma plantilla cuenta **35**. La página
+donde la apliqué tiene 35, y su censo no lo menciona:
+
+```json
+{"post_id":197,"encontrados":0,
+ "censo":{"container":13,"heading":6,"text-editor":5,"image":4,"button":3,
+          "elementskit-client-logo":2,"icon-list":1,"google_maps":1}}
+```
+
+**No hay formulario en la página de contacto de un sitio recién montado, y ninguna de las
+dos herramientas que lo tocaron lo dijo.** El import contestó 36 y lo dio por bueno; el apply
+contestó 35 y también.
+
+No sé si lo descarta el importador, el aplicador o Elementor, y no puedo saberlo sin leer el
+código. Lo que sí puedo decir es el efecto: **un widget cuyo tipo no está registrado se cae
+por el camino en silencio.** Y es justo el caso normal al importar un kit, que declara sus
+plugins precisamente porque usa widgets que no vienen de serie.
+
+La descripción de `elementor_template_apply` dice que «avisa si lo copiado no trae etiquetas
+dinámicas» —un aviso que añadieron por una entrada de mi registro anterior—. El aviso que
+falta es hermano de ése y más grave: **«se descartaron N widgets cuyo tipo no está registrado
+en este sitio: metform»**. El servidor sabe qué widgets hay registrados: tiene
+`elementor_widgets`.
+
+**Qué voy a hacer:** poner un formulario de Contact Form 7 en su sitio, que es lo acordado
+con el cliente.
+
+## Estado al cerrar la fase 1
+
+21 páginas creadas, publicadas y con su plantilla del kit aplicada. Portada, blog e identidad
+del sitio configuradas. Seis páginas de prueba y de relleno a la papelera. Las cuatro de
+WooCommerce, intactas y publicadas, fuera del menú.
+
+Contenido escrito: Contacto entero y los 28 titulares de la portada.
