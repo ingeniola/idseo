@@ -795,3 +795,113 @@ publicada en un informe.
 
 Es el mismo patrón que llevo anotando desde mcp1, pero al revés y en bueno: **las dos mitades
 existen y sí se tocan, y nadie lo dice.**
+
+---
+
+# Fase 6 — Ocho fichas, menú, y un sitio que cuelga de un servidor ajeno
+
+## Las ocho fichas, con el método corregido
+
+Titulares y textos de las ocho familias de máquina, escritos de verdad y distintos entre sí:
+cada ficha tiene su precio, sus modelos, qué va incluido y un consejo de oficio propio («si
+la parcela pasa de media hectárea, el bulldozer sale más barato que dos excavadoras»).
+
+**Cuatro llamadas en total para 8 páginas y 232 elementos:**
+
+| llamada | contenido | elementos |
+|---|---|---|
+| `batch` de 6 `elementor_find` | mapas de id de 204–209 | — |
+| `batch` de 8 `elementor_element_update` | 17 titulares × 8 | 136 |
+| `batch` de 4 `elementor_find` | mapas de texto de 206–209 | — |
+| 2 × `batch` de 4 `elementor_element_update` | 12 textos × 8 | 96 |
+
+Verificado en el HTML publicado: `/maquinaria/excavadoras/` sirve
+`<title>Alquiler de excavadoras de cadenas - Altorre Maquinaria</title>` con su
+meta-descripción, que Rank Math saca del contenido.
+
+## ✅ El menú, en tres llamadas
+
+`menu_create` + `menu_update` con los 16 items y su jerarquía (las ocho fichas colgando de
+Maquinaria, Equipo y Opiniones colgando de Nosotros) + `menu_assign` a `menu-1`.
+
+`menu_update` avisa bien de lo que va a hacer: *«0 items pasan a ser 16. El menú se
+sustituye entero. Los items que no estén en la lista nueva se borran, y con ellos lo que
+otros plugins hubieran guardado en ellos»*. Y `menu_list` devuelve además **las ubicaciones
+que registra el tema y cuáles están sin asignar**, que es justo lo que hace falta para no
+dejarse el menú creado y colgado en el aire.
+
+## G El widget del menú apuntaba a un menú que no existe
+
+Asignar el menú a la ubicación del tema no bastó: la cabecera usa `ekit-nav-menu`, que elige
+el menú por su cuenta. El ajuste traía `"elementskit_nav_menu": "primary-menu"`, el slug del
+sitio de demostración del kit.
+
+Lo encontré leyendo el widget con `elementor_element_get`, que además resolvió sus 31
+referencias globales de color y tipografía —y todas apuntan ya a la paleta del kit, lo que
+confirma que lo de la fase 3 caló—. Corregido a `principal` en una llamada. Verificado: el
+menú sale en el HTML con sus `dropdown-item`.
+
+**Mi lectura:** no es fricción del plugin, es el kit. Pero es un caso donde `elementor_find`
+no ayuda —el slug no es texto visible— y sólo se ve leyendo el widget entero. Un
+`elementor_text_audit` que funcionara tampoco lo habría cazado.
+
+## A El kit no trae sus imágenes, y el sitio cuelga de un servidor ajeno
+
+El hallazgo más serio para un encargo que pide «terminado y publicable».
+
+```
+media_list(mime_type:"image") → {"found":1, "items":[{"id":35,"title":"woocommerce-placeholder"}]}
+```
+
+**Una imagen en toda la biblioteca**, y es el marcador de WooCommerce. El logo, las fotos de
+las ocho máquinas, los retratos del equipo, los iconos, los logotipos de clientes y todos los
+fondos apuntan a `https://stackkrew.com/templatekit/wp-content/uploads/2026/08/…`, que es el
+servidor de demostración del autor del kit. Confirmado en el HTML publicado de la portada.
+
+Y no están en disco: `file_search` sobre la carpeta del kit sólo encuentra los 19
+`screenshots/`. Las imágenes de verdad viven únicamente en stackkrew.com; el manifiesto las
+lista con su `thumbnail_url` remota.
+
+**Qué significa:** el sitio se ve bien hoy y se queda sin una sola imagen el día que ese
+servidor caiga, cambie de rutas o bloquee el enlazado desde fuera. Además está consumiendo
+ancho de banda de un tercero sin permiso. **Esto no se puede publicar así.**
+
+**Mi lectura:** es la cuarta parte del flujo «importar un kit» que el servidor no hace.
+Ahora tengo el cuadro completo:
+
+| Parte de importar un kit | ¿lo hace el servidor? |
+|---|---|
+| Instalar los plugins que el kit declara | ❌ no hay herramienta |
+| Importar las plantillas | ✅ y muy bien, con `ruta` |
+| Aplicar los estilos globales | ❌ crea una plantilla vacía |
+| **Descargar las imágenes y reescribir las referencias** | ❌ |
+
+`elementor_template_import` dice que regenera los identificadores de elemento —y lo hace, y
+lo explica—. Lo que no dice en ninguna parte es que **las imágenes se quedan apuntando al
+sitio de origen**. Un aviso de una línea en su respuesta —«este paquete referencia N imágenes
+de un dominio externo; no se han descargado»— convertiría una bomba de relojería en una
+tarea pendiente visible.
+
+**Qué se puede hacer con las herramientas que hay:** `media_upload` acepta una URL pública, y
+las URLs de stackkrew lo son. Se pueden traer las ~60 imágenes a la biblioteca con un `batch`.
+Lo que no hay es forma de reescribir las referencias en bloque: habría que localizar cada
+widget `image` y cada contenedor con `background_image` en las 21 páginas más cabecera y pie,
+y actualizarlos uno a uno con `cambios`. Es viable —`elementor_find(widget:"image")` da los
+identificadores— pero es un trabajo largo.
+
+**Lo he parado aquí para preguntar**, porque hay una alternativa que cuesta un clic: el
+plugin Template Kit Import tiene su propio botón de importar en wp-admin, y eso descarga las
+imágenes y reescribe las referencias solo. No lo hago por mi cuenta porque reimportar por esa
+vía puede duplicar plantillas y pisar lo ya escrito.
+
+## Estado al cerrar la fase 6
+
+Escritas y verificadas: portada, Maquinaria, Contacto y las ocho fichas de familia. Menú de
+16 items funcionando con su jerarquía. Tres formularios de CF7. Cabecera, pie y 404 en su
+sitio. Paleta y tipografías del kit aplicadas.
+
+Pendientes de contenido: Tarifas, Nosotros, Equipo, Opiniones, Blog y las cuatro legales.
+Pendiente de decisión: las imágenes.
+
+**Bajadas a PHP: dos**, las dos a la misma línea de regeneración de la caché del theme
+builder.
