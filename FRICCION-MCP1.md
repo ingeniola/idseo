@@ -2383,3 +2383,86 @@ mida. Si mañana cambia el logo, sigue cuadrando.
 Las dos escrituras fueron la llamada única a `cambios` de arriba.
 
 **Sin verificar visualmente**, como siempre. Tercera corrección a ciegas de este menú.
+
+---
+
+# Fase 21 — Mi arreglo del panel estaba a medias, y por qué no podía saberlo
+
+Verificación hecha en otra sesión, con medidas en un móvil de 375×812. Mi arreglo de la fase
+20 iba bien encaminado y **se quedó un nivel corto**.
+
+## Lo que escribí yo
+
+```css
+@media(max-width:1024px){ selector .e-n-menu{position:static;} }
+```
+
+El razonamiento era correcto: `.e-n-menu` es `position:relative` y el panel usa `top:100%`,
+así que quitándole la posición, el ancla sube al primer antepasado posicionado, que yo había
+marcado a propósito: la tarjeta de la cabecera `f14eacd`.
+
+**El fallo:** entre `.e-n-menu` y la tarjeta hay dos elementos más que también están
+posicionados —el `div` del propio widget (`a1b2c3d`) y el contenedor de la columna del menú
+(`c0675af`)—. El ancla no llegó a la tarjeta: **se paró en el div del widget**, que mide
+79×20 px y está centrado verticalmente.
+
+## Lo que se midió, y lo que yo no llegué a ver
+
+| | antes | después |
+|---|---|---|
+| inicio del panel | 88 px — parte el logo | 130 px — borde inferior exacto de la cabecera |
+| ancho del panel | 79 px | 335 px, alineado con la tarjeta |
+| logo | cortado, «del Valle» partido | entero |
+
+Y aquí está lo que más me interesa: **el panel medía 79 px de ancho y los rótulos salían
+truncados** —«Servicio», «Cobertur», «Nosotro»—. Yo no sabía que eso estaba pasando. La
+captura que tenía enseñaba el logo cortado, y eso es lo único que arreglé mentalmente. El
+`left:0;right:0` que escribí resolvía contra esos mismos 79 px del widget: **era el mismo
+defecto dando dos síntomas**, y yo sólo conocía uno.
+
+## El arreglo bueno
+
+```css
+@media(max-width:1024px){ selector, selector .e-n-menu{position:static;} }   /* a1b2c3d */
+@media(max-width:1024px){ selector{position:static;} }                      /* c0675af */
+```
+
+Dos palabras más que las mías: el propio `selector` en el widget, y el contenedor de la
+columna. Nada más tocado. En escritorio el widget conserva `position:relative` y el mega menú
+sigue abriendo a ancho completo, porque todo va dentro del `@media` que ya existía.
+
+## Mi lectura
+
+No hay fricción de herramienta que anotar: `cambios` funcionó, escribió lo que le pedí y lo
+escribió bien. **Lo que falló fue mi modelo mental de la cascada de posicionamiento, y falló
+en la única dirección que no podía comprobar.** Elementor posiciona contenedores y widgets
+por su cuenta, sin que eso aparezca en los ajustes del elemento: no hay `position` en el
+JSON de `a1b2c3d` ni en el de `c0675af`, sale del CSS del propio Elementor. Leyendo los
+ajustes y leyendo el CSS generado **no se ve quién es el antepasado posicionado**: eso sólo
+lo resuelve el navegador, y para verlo hay que tener uno.
+
+Tercer arreglo a ciegas de este menú y tercera vez que lo cierra una persona midiendo en un
+teléfono. Es el mejor argumento que tengo para lo que pedí en la fase 16 y 17: no una captura,
+sino **medir**. Las cifras de la tabla de arriba —88 px, 79 px, 130 px, 335 px— son
+exactamente lo que yo no puedo obtener, y son las que convierten «se ve raro» en un
+diagnóstico.
+
+## Dos cosas buenas del 1.8.0 verificadas en esa sesión
+
+- **`diagnostics`**: versión 1.8.0, canal firmado, 13 comprobaciones, 0 fallos y 0 avisos.
+- **`elementor_element_update` sin nada que cambiar**, sólo `post_id`:
+
+  ```
+  [invalid_input] Dime qué cambiar: element_id con ajustes para uno solo,
+  o cambios con la lista para varios.
+  ```
+
+  Nombra **las dos formas válidas** en el mismo mensaje. Es de la familia del error de
+  `media_update` de la fase 7, que es lo mejor que tiene este servidor: errores que te
+  arreglan la llamada siguiente.
+
+## Queda abierto (no tocado)
+
+El subpanel de Servicios en móvil sale a 375 px dentro de una tarjeta de 335 y asoma unos
+20 px por la derecha. Viene de `content_width: full_width` del widget, es anterior a todo
+esto y no provoca desplazamiento horizontal. Es un cambio aparte y no lo he hecho.
