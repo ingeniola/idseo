@@ -1516,3 +1516,153 @@ que más me parece que falta:
 De la lista, los dos que cambiarían más el trabajo diario son el primero y el segundo. Con
 una escritura en lote barata y una lectura de texto, este sitio se habría hecho con las
 herramientas del servidor en lugar de con PHP, que es justamente lo que veníamos a medir.
+
+---
+
+# Fase 13 — Mega menú de Servicios con Elementor Pro
+
+Encargo: mega menú en Servicios, con ElementsKit o con Elementor Pro. Elegí el widget
+`mega-menu` de Elementor Pro porque toda su configuración vive en `_elementor_data` y por
+tanto se puede construir y verificar; el mega menú de ElementsKit se configura desde
+Apariencia → Menús y guarda el contenido en un CPT propio (`elementskit_content`) con meta
+que no está documentada en ninguna herramienta, y el encargo dice que no lea código.
+
+## C El filtro de `elementor_widget_schema` no filtra, y esconde justo lo que hace falta
+
+**Llamada:** `elementor_widget_schema(widget:"mega-menu", buscar:"menu")`
+
+**Respuesta:** `Error: result (62,935 characters) exceeds maximum allowed tokens.` Volcado a
+fichero. Dentro: `"total":675,"mostrados":382`. El filtro «menu» dejó pasar 382 de 675
+controles, porque busca también en la **etiqueta** traducida y en este widget casi todas las
+etiquetas llevan «menú».
+
+Pero el problema de verdad es otro. Al leer el volcado, el control que necesitaba aparece
+así y sólo así:
+
+```json
+{"ajuste":"menu_items","etiqueta":"Elementos del menú",
+ "tipo":"nested-elements-repeater",
+ "por_defecto":[{"item_title":"Elemento 1"},{"item_title":"Elemento 2"}]}
+```
+
+Un repetidor cuyas filas tienen campos, y la herramienta **no lista los campos**. De la
+respuesta sólo se puede deducir que existe `item_title`, porque asoma en el valor por
+defecto. Los tres que de verdad importan —`item_link`, `item_dropdown_content` y el
+contrato de los hijos anidados— no salen.
+
+**Qué hice:** bajar a la API de Elementor por PHP:
+
+```php
+$w = \Elementor\Plugin::$instance->widgets_manager->get_widget_types('mega-menu');
+$c = $w->get_controls('menu_items');  // ['fields'] trae los campos de la fila
+```
+
+De ahí salieron `_id`, `item_title`, `item_link` (url), `item_dropdown_content` (switcher),
+`item_icon`, `item_icon_active`, `element_id`. Y de `get_default_children_elements()`, por
+reflexión porque el método es protegido, el contrato de los hijos: **un `container` por
+cada fila del repetidor, en el mismo orden, en el array `elements` del widget.**
+
+**Coste:** 4 llamadas, una de ellas reventada por tamaño.
+
+**Mi lectura:** fallo del plugin, y con arreglo barato. La propia descripción de la
+herramienta dice que existe «para no inventarse nombres de ajuste», que es exactamente lo
+que me tocó hacer con los campos del repetidor. Dos cosas la arreglarían: que `buscar`
+busque sólo en la clave salvo que se le pida lo contrario, y que un control de tipo
+`repeater` o `nested-elements-repeater` devuelva sus campos anidados. Sin lo segundo, la
+herramienta es incapaz de describir cualquier widget con repetidor, que en Elementor son casi
+todos los interesantes.
+
+## A No hay forma de crear un widget anidado
+
+El `mega-menu` es un widget con dos mitades que tienen que ir sincronizadas: el repetidor
+`menu_items` (8 filas) y el array `elements` del propio widget (8 contenedores, uno por
+fila, en el mismo orden). Si se desincronizan, el menú se rompe.
+
+**Qué quería hacer:** crear el widget con sus 8 items, y dentro del segundo, el panel del
+mega menú: contenedor horizontal, tres columnas de enlaces a los 13 servicios y una cuarta
+de llamada a la acción con fondo, titular, texto y botón. Veintitantos elementos.
+
+**Llamadas disponibles:** `elementor_element_add` añade un widget suelto a un padre. No
+conoce el contrato de hijos de un widget anidado, y aunque lo conociera, construir el panel
+serían ~25 llamadas encadenadas en las que cada una necesita el `element_id` que devolvió la
+anterior.
+
+**Qué hice:** montar el árbol completo en PHP y sustituir el nodo del `ekit-nav-menu`
+anterior de una vez. Una llamada.
+
+**Coste:** ~25 llamadas ahorradas, pero también ~25 puntos donde la herramienta no habría
+sabido qué hacer.
+
+**Mi lectura:** hueco real, y el más caro del catálogo para Elementor moderno. Desde que
+existen contenedores y elementos anidados, «montar una sección» es escribir un árbol, no
+añadir widgets de uno en uno. Falta un `elementor_tree_insert(post_id, ruta, arbol_json)`
+que acepte una rama entera y la valide antes de guardarla. Con eso, el 90% del trabajo que
+hice en PHP durante todo este proyecto se podría haber hecho con herramientas.
+
+## G Los identificadores de elemento tienen que ser hexadecimales
+
+**Llamada:** guardé el widget con `'id' => 'megamenu1'`.
+
+**Respuesta:** se guardó, la página renderizó bien, y el resultado trajo 31 avisos idénticos:
+
+```
+Deprecated en línea 230: Invalid characters passed for attempted conversion,
+these have been ignored
+```
+
+**Qué hice:** cambiarlo por `a1b2c3d`. Los avisos desaparecieron.
+
+**Coste:** 1 llamada.
+
+**Mi lectura:** límite razonable de Elementor (genera los identificadores con `dechex`, así
+que sólo admite `[0-9a-f]`), pero nada lo dice. Ni la descripción de `elementor_element_add`
+ni la de `elementor_element_duplicate` mencionan el formato del identificador. Y el aviso
+que sale no nombra ni el identificador ni el elemento: 31 líneas iguales que no dicen dónde
+está el problema. Lo anoto porque es el tipo de cosa que se guarda mal, funciona, y aparece
+seis meses después.
+
+## G Los colores globales son identificadores opacos, y me equivoqué de color
+
+Puse fondo a la columna de llamada a la acción con `globals/colors?id=73f6f6c`, que por el
+sitio donde lo había visto antes daba por hecho que era un verde claro.
+
+**Respuesta:** ninguna. Se guardó y se pintó. Al mirar el kit después:
+
+```
+73f6f6c = "Transparent #00000000"
+fed1e35 = "Alt bg Light #EAF0DA"   ← el que quería
+```
+
+La columna quedó sin fondo y nadie se quejó, porque un fondo transparente no es un error,
+es un fondo.
+
+**Qué hice:** `elementor_get_kit` una vez, ver la tabla de once colores con su nombre, y
+corregir. Verificado en el CSS generado: `background-color:var( --e-global-color-fed1e35 )`.
+
+**Coste:** 2 llamadas. Culpa mía por no mirar la tabla antes.
+
+**Mi lectura:** el error es mío, pero lo anoto porque la herramienta lo facilita.
+`elementor_element_get` devuelve `"background_color": "globals/colors?id=73f6f6c"` y se queda
+tan ancha. Un campo hermano con el valor resuelto y el nombre —`#00000000`, «Transparent»—
+convertiría una referencia opaca en algo que se puede leer. Es el mismo problema que tuve en
+la fase 9 comprobando si el logo blanco del pie caía sobre fondo negro: tuve que ir al CSS
+generado a resolver la variable a mano.
+
+## Resultado y una decisión que hay que saber
+
+El mega menú funciona: 8 entradas de primer nivel, el panel de Servicios con los 13
+servicios en tres columnas agrupadas (Mantenimiento, Diseño e instalación, Árboles y
+sanidad) y una cuarta columna con llamada a la acción y botón a `/cotizacion/`. Panel blanco
+con sombra y esquinas inferiores redondeadas, apertura al pasar el cursor, y botón
+hamburguesa a partir de tableta. Verificado en el front: 23 enlaces, ninguno vacío.
+
+**La decisión:** el menú ya no sale de Apariencia → Menús. El widget `mega-menu` de
+Elementor Pro guarda sus entradas dentro de la cabecera, así que el menú de WordPress
+«Principal» (21 items) se queda huérfano: sigue existiendo y no lo usa nadie. Para cambiar
+el menú a partir de ahora hay que entrar a editar la plantilla de cabecera en Elementor.
+
+Con ElementsKit se habría conservado Apariencia → Menús, pero el contenido del mega menú se
+edita desde su propio constructor y se guarda en un CPT con meta no documentada: no había
+forma de construirlo ni de verificarlo desde aquí sin leer el código del plugin, que el
+encargo prohíbe. Si se prefiere el otro reparto, se revierte cambiando el widget de la
+cabecera; el menú de WordPress sigue intacto.
