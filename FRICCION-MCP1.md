@@ -2211,3 +2211,175 @@ Van tres fases seguidas —17, 18 y 19— en las que el fallo lo ha encontrado u
 pantalla de una persona. Ninguna la habría encontrado yo con el HTML, y la 19 ni siquiera con
 el CSS, porque el CSS era correcto: lo que estaba mal era la relación entre un número del CSS
 y el tamaño real de una imagen.
+
+---
+
+# Fase 20 — Plugin 1.8.0: qué se arregló y qué sólo cambió de sitio
+
+Servidor reconectado y esquema nuevo confirmado antes de tocar nada.
+
+## ✅ `elementor_element_update` con `cambios`: sí compensa, y por la razón correcta
+
+Era el problema número dos del cierre y el que me empujó a escribir el 90 % del sitio en PHP.
+
+**Llamada** (el arreglo del panel del menú móvil, dos elementos de la cabecera):
+
+```json
+{"post_id":99,"cambios":[
+  {"element_id":"f14eacd","ajustes":{"custom_css":"@media(max-width:1024px){selector{position:relative;}}"}},
+  {"element_id":"a1b2c3d","ajustes":{"custom_css":"@media(min-width:1025px){…}@media(max-width:1024px){…}"}}]}
+```
+
+**Respuesta, entera:**
+
+```json
+{"post_id":99,"aplicados":2,
+ "elementos":[{"element_id":"f14eacd","claves":["custom_css"]},
+              {"element_id":"a1b2c3d","claves":["custom_css"]}],
+ "deshacer":{"revision":328,"como":"history_restore con revision=328 devuelve esto a como estaba."}}
+```
+
+Unos 200 bytes. Antes, **cambiar tres textos de un solo widget elementskit costaba unas 1.200
+palabras de respuesta**.
+
+Lo que importa no es el tamaño, es que **la respuesta ya no escala con el widget**: es
+proporcional a las claves que cambias, no a lo que el widget tiene dentro. Ese era el defecto
+de fondo, y está resuelto. Con esto, el trabajo de una página cabe en llamadas normales.
+El `deshacer` con su revisión es un añadido que antes no estaba y que da confianza para
+escribir en lote.
+
+**Pero no quita todo el problema, y el trozo que queda es el que me costó más caro.**
+
+`post_id` es uno solo, y cada entrada de `cambios` se identifica por `element_id`. El trabajo
+que de verdad me obligó a bajar a PHP no era una página: eran **trece páginas clonadas de la
+misma plantilla**. Y los identificadores no se repiten entre clones. La misma ruta, en cuatro
+páginas hechas de la misma plantilla:
+
+| ruta | 112 | 149 | 150 | 161 |
+|---|---|---|---|---|
+| `0.0.0` | eacb488 | df629ea | 1954468 | 3960303 |
+| `1.1.1` | 7b96b1f | 08cebce | c803b11 | 2c99225 |
+| `1.1.2` | c74354e | b177422 | 72d70da | b96645f |
+
+Por eso inventé el direccionamiento por ruta: **la ruta sí es la misma en todos los clones.**
+Con `cambios` tal como está, las 13 páginas de servicio serían una lectura para mapear
+identificadores más 13 llamadas. Con el aplicador por rutas fue **una**.
+
+**Veredicto:** para trabajo de una página, compensa y con holgura: la usaría siempre. Para
+trabajo repetido sobre clones de plantilla, que en un sitio hecho con kit es la mitad del
+encargo, sigue sin compensar. Dos arreglos posibles, por orden:
+
+1. Que cada entrada de `cambios` pueda traer su propio `post_id`. Trece páginas, una llamada.
+2. Que `element_id` admita como alternativa una `ruta` (`"1.1.2"`). Es lo que hace que un
+   cambio sea describible una vez y aplicable a todos los clones.
+
+Con cualquiera de las dos, el aplicador en PHP sobra. Sin ellas, lo sigo necesitando para el
+caso que más pesa.
+
+## ❌ `elementor_template_conditions`: cambió el falso positivo por un falso negativo
+
+Esto es lo que preguntabas, y la respuesta es que **sólo movió el problema**, además en la
+dirección que engaña más.
+
+**Llamada** (reaplicar la condición que la cabecera ya tenía):
+
+```json
+{"post_id":99,"condiciones":["include/general"]}
+```
+
+**Respuesta:**
+
+```json
+{"id":99,"condiciones":["include/general"],
+ "cache":"regenerada por Elementor Pro","regenerada":true,
+ "confirmado":false,
+ "efecto":"La condición está guardada pero Elementor Pro TODAVÍA NO la aplica en \"header\".
+           Su caché sigue vieja: abre la plantilla en el editor y guarda, o vacía la caché de
+           Elementor. Hasta entonces el visitante no verá esta plantilla."}
+```
+
+**La cabecera se está dibujando en todas las páginas del sitio.** Comprobado justo después,
+por HTTP, en `/`, `/planes-de-mantenimiento/` y `/servicios/mantenimiento-de-jardines/`:
+`data-elementor-type="header" data-elementor-id="99"` en las tres, y el pie también.
+
+Y lo mismo con el pie (#100): `confirmado:false`, mismo texto, y el pie se dibuja igual.
+O sea: **`confirmado` da false siempre**, al menos desde una llamada del servidor.
+
+**La causa, con la comprobación hecha:**
+
+```php
+$cm->get_cache()->get_by_location('header')   → {"99":["include\/general"]}   ✅ correcto
+$loc->get_documents_for_location('header')    → []                            ← el oráculo
+```
+
+`get_documents_for_location()` devuelve `[]` aunque la caché esté bien y aunque el sitio esté
+dibujando la plantilla. Lo probé también **simulando una consulta principal de la portada**
+(`WP_Query(['page_id'=>103])`, `is_main_query`, `the_post()`): sigue devolviendo `[]`. Ese
+método no es un oráculo válido fuera de una petición de front de verdad, porque depende del
+contexto de la petición, y una llamada MCP nunca lo es.
+
+Es, con precisión, **el mismo método que usé yo en la fase 3 para diagnosticar el fallo
+original**. Entonces me sirvió porque el dato estaba mal de verdad y el `[]` coincidía con la
+realidad. Ahora que el dato está bien, el `[]` miente.
+
+**Y la respuesta se contradice a sí misma:** `"cache":"regenerada por Elementor Pro"` y
+`"regenerada":true` conviven en el mismo objeto con `"confirmado":false`. Si me creo lo
+primero, está hecho; si me creo lo segundo, no. Un consumidor automático no puede decidir.
+
+**Coste de este falso negativo:** me mandó a arreglar algo que no estaba roto. Gasté cuatro
+llamadas en comprobar que el sitio estaba bien, y el `efecto` le pide a la persona que abra
+el editor y guarde a mano, trabajo que no hace falta. **Un falso negativo es más caro que el
+falso positivo anterior**: el falso positivo te deja el sitio roto y lo descubres mirando; el
+falso negativo te hace romper lo que funciona.
+
+**Cómo lo comprobaría yo**, por orden de fiabilidad:
+
+1. Contra la caché de condiciones: `get_cache()->get_by_location($ubicacion)` y mirar si el
+   `post_id` está dentro. En este caso da la respuesta correcta.
+2. Mejor todavía y a prueba de contexto: una petición HTTP real a una página que deba
+   cumplir la condición y buscar `data-elementor-type="<ubicacion>"` en el HTML. Es lo que
+   hago yo y es lo único que contesta de verdad a la pregunta «¿lo ve el visitante?».
+
+Y mientras tanto, si `confirmado` no se puede calcular con seguridad, es mejor no devolverlo
+que devolverlo mal. La lección de todo este registro es que un dato afirmado con confianza y
+equivocado cuesta más que un dato ausente.
+
+## ✅ `option_update`: la descripción ya no miente
+
+Anotado en el cierre como el caso de «una puerta que promete y no existe». La descripción
+nueva dice: *«El título y la descripción del sitio NO están bloqueados: se pueden cambiar
+desde aquí»*, y enumera lo que sí lo está. Cierra el caso.
+
+## Lo que NO he podido comprobar en esta ronda, y lo digo en vez de suponerlo
+
+- **`elementor_template_apply` (punto 2).** No hay ninguna plantilla que aplicar: las 33
+  páginas están hechas. Aplicar una encima destruiría contenido real. Sin trabajo que lo
+  justifique, no lo pruebo.
+- **`cf7_update` (punto 4).** Los cuatro formularios están correctos y no hay cambio
+  pendiente. Probarlo exigiría escribir y revertir.
+- **`seo_update` (punto 5).** El aviso salta cuando el asistente de Rank Math está sin
+  terminar, y lo terminé en la fase 5. Aquí ya no puede saltar, así que una llamada no
+  probaría nada.
+
+Los tres se prueban solos en el próximo encargo que los toque.
+
+## El arreglo del menú que traías
+
+El panel arrancaba a media altura de la cabecera y partía el logo. Causa:
+
+```css
+.elementor-widget-n-menu .e-n-menu{ position: relative }
+.e-n-menu-wrapper{ top: 100% }
+```
+
+El panel se ancla al widget del hamburguesa, que está centrado verticalmente dentro de la
+cabecera. `top:100%` de un icono centrado cae a media cabecera, encima del logo.
+
+Lo arreglé **sin números mágicos**, que era la trampa de la fase 19: en móvil y tableta,
+`.e-n-menu` pasa a `position: static` y el panel se ancla a la tarjeta de la cabecera, que
+marqué `position: relative`. Así `top:100%` es el borde inferior de la cabecera, mida lo que
+mida. Si mañana cambia el logo, sigue cuadrando.
+
+Las dos escrituras fueron la llamada única a `cambios` de arriba.
+
+**Sin verificar visualmente**, como siempre. Tercera corrección a ciegas de este menú.
