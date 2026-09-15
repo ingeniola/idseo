@@ -2143,3 +2143,71 @@ Lo digo tal cual en lugar de dar el trabajo por cerrado: hace falta otra captura
 Y hace falta, en general, lo que pedí en la fase 16 con el ancho como parámetro, porque este
 menú lleva ya tres rondas —escritorio roto, móvil roto, móvil roto otra vez— y las tres las ha
 encontrado una persona mirando la pantalla, no yo.
+
+---
+
+# Fase 19 — La franja blanca de arriba en móvil
+
+Captura del cliente: entre la barra del navegador y la tarjeta verde de la cabecera hay una
+banda blanca que no pinta nada.
+
+## No era un fallo de herramienta: era aritmética del kit que dejó de cuadrar
+
+La cabecera **no tiene fondo**. Lo comprobé en el CSS generado y en los ajustes: el
+contenedor de sección `ccc684d` no lleva `background_background`, y no hay ninguna regla que
+pinte el `body` —ni en el CSS del kit (`post-9.css`, 12 KB), ni en el del tema, ni en ninguna
+de las hojas de `uploads/elementor/css/`. Lo verde es la **tarjeta interior**, y el verde de
+debajo es el hero de la portada. Lo de en medio es el fondo del documento: blanco.
+
+Lo que hace el kit para que no se note es solaparlo en móvil:
+
+```css
+@media(max-width:767px){
+  .elementor-element-ccc684d{ --min-height:90px; --margin-bottom:-90px; }
+}
+```
+
+La sección mide 90 px y tira del contenido 90 px hacia arriba: se cancelan y el hero pasa por
+detrás. Truco limpio **mientras la cabecera mida de verdad 90 px**.
+
+Y ahí está el problema: **el logo de Jardines del Valle es mucho más alto que el del kit.**
+El fichero es de 1983×793 y en móvil ocupaba el 75 % del ancho, así que la cabecera real
+medía unos 150 px. El tirón de 90 px se quedaba 60 px corto, y esos 60 px de fondo del
+documento son la banda blanca.
+
+**Qué hice**, con números en lugar de a ojo, porque la relación de la imagen la sé:
+
+```
+1983 × 793  →  a 210 px de ancho son exactamente 84 px de alto
+25 (padding superior de la sección) + 84 (logo) + 20 (padding de la tarjeta) = 129
+```
+
+- logo `width_mobile: 210px`
+- sección `min_height_mobile: 130px` y `margin_mobile.bottom: -130px`
+
+Comprobado en el CSS generado: `--min-height:130px` y `--margin-bottom:-130px` en
+`max-width:767px`, y `.elementor-element-a64d74c img{width:210px}`. Los dos números se
+cancelan y ya no queda hueco. De paso el logo deja de comerse tres cuartos de la pantalla.
+
+**Coste:** 5 llamadas, tres de ellas de diagnóstico equivocado (busqué un fondo del `body`
+que no existe, y una regla en el CSS del tema que tampoco).
+
+## Mi lectura
+
+Ninguna herramienta falló aquí, y es justo decirlo. Lo anoto por otra cosa:
+
+**Es un fallo que nace de haber hecho bien una tarea anterior.** Poner el logo del cliente
+—fase 7, con su muestreo de píxeles y todo— rompió una cuenta que el kit tenía calibrada para
+su propio logo de demostración. Nada avisa de eso: el `margin-bottom: -90px` es un número
+escrito a mano en una plantilla comprada, y no hay nada que diga «esto depende de que la
+cabecera mida 90 px». No lo sabe Elementor, no lo sabe el servidor MCP y no lo sabía yo hasta
+que se vio la franja.
+
+En un sitio hecho con kit esto no es una rareza, es lo normal: **las plantillas están llenas
+de números calibrados contra un contenido que tú vas a sustituir.** Un agente que trabaja a
+ciegas los rompe sin enterarse. Y de nuevo, la única forma de enterarse es mirar.
+
+Van tres fases seguidas —17, 18 y 19— en las que el fallo lo ha encontrado una captura de
+pantalla de una persona. Ninguna la habría encontrado yo con el HTML, y la 19 ni siquiera con
+el CSS, porque el CSS era correcto: lo que estaba mal era la relación entre un número del CSS
+y el tamaño real de una imagen.
