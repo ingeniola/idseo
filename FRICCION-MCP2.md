@@ -342,3 +342,148 @@ del sitio configuradas. Seis páginas de prueba y de relleno a la papelera. Las 
 WooCommerce, intactas y publicadas, fuera del menú.
 
 Contenido escrito: Contacto entero y los 28 titulares de la portada.
+
+---
+
+# Fase 2 — `elementor_template_conditions` dice que regenera la caché y no la regenera
+
+Esto corrige lo que escribí en la fase 20 del registro de mcp1, y lo corrige a peor.
+
+## B La prueba, esta vez sin ambigüedad
+
+**Llamada:** `elementor_template_conditions(post_id:161, condiciones:["include/general"])`
+
+**Respuesta, copiada literalmente como se pidió:**
+
+```json
+{"id":161,"condiciones":["include/general"],
+ "cache":"regenerada por Elementor Pro",
+ "regenerada":true,
+ "confirmado":false,
+ "efecto":"La condición está guardada pero Elementor Pro TODAVÍA NO la aplica en \"header\".
+           Su caché sigue vieja: abre la plantilla en el editor y guarda, o vacía la caché de
+           Elementor. Hasta entonces el visitante no verá esta plantilla."}
+```
+
+Las tres plantillas —cabecera (161), pie (163) y 404 (185)— contestaron lo mismo, con su
+ubicación correspondiente.
+
+**Comprobación en el front:**
+
+```
+content_render(189, alcance:"pagina", buscar:"elementor-location-header")
+→ {"aparece": false}
+```
+
+La cabecera no se dibujaba. **`confirmado:false` tenía razón.**
+
+**Lo que descarté antes de acusar a nadie:**
+
+- `elementor_templates` decía que los tres datos estaban perfectos: tipo `header`, estado
+  `publish`, condiciones `["include/general"]`.
+- `elementor_regenerate_css()` sobre todo el sitio: no cambió nada. Es CSS, no condiciones.
+- Guardar la plantilla desde la API (`elementor_element_update` sobre la cabecera, que es un
+  guardado de documento real): tampoco. El `efecto` dice «abre la plantilla en el editor y
+  guarda»; guardarla por la API no equivale.
+- `abilities_list(buscar:"cache")`: sólo una de Rank Math para su marketplace. Nada de
+  Elementor.
+
+**La prueba final, ya en PHP:**
+
+```php
+$cm = ...->get_conditions_manager();
+$antes    = $cm->get_cache()->get_by_location('header');   // []
+$cm->get_cache()->regenerate();
+$despues  = $cm->get_cache()->get_by_location('header');   // {"161":["include\/general"]}
+```
+
+**Antes: vacía. Después de regenerar de verdad: correcta.** Y el front pasó a dibujar la
+cabecera en la llamada siguiente.
+
+O sea: la herramienta contestó `"cache":"regenerada por Elementor Pro"` y `"regenerada":true`
+**tres veces**, y la caché estaba vacía las tres.
+
+## Y `confirmado` sigue sin servir, aunque aquí acertara
+
+En mcp1 concluí que `confirmado` era un falso negativo. Con los datos de hoy la conclusión
+correcta es otra y es peor:
+
+| | caché real | `confirmado` | ¿acertó? |
+|---|---|---|---|
+| mcp1, fase 20 | correcta (la regeneré yo en la fase 3) | `false` | **no**, la cabecera se dibujaba |
+| mcp2, hoy | vacía | `false` | sí, por coincidencia |
+
+`confirmado` devuelve `false` siempre. Coincide con la realidad sólo cuando la realidad es
+«no». Eso no es un indicador: es una constante con suerte variable. Y esto sólo se ve
+teniendo los dos casos, que es lo que da tener el registro de la ronda anterior delante.
+
+**Mi lectura.** Es el fallo más grave de los que llevo encontrados en este plugin, y por dos
+razones que se suman:
+
+1. **La herramienta existe precisamente para esto.** Su descripción dice: *«Se guarda por el
+   gestor de Elementor Pro, que además regenera su caché de ubicaciones: escribir el
+   metadato a mano deja el dato bien y la plantilla sin aplicarse, y es el fallo más difícil
+   de diagnosticar del theme builder»*. Describe el fallo con precisión, se ofrece como la
+   solución, y produce exactamente el fallo que describe.
+2. **La respuesta se contradice a sí misma** y quien la lee no puede decidir. `regenerada:
+   true` junto a `confirmado: false`. Hoy sé cuál miente porque bajé a PHP. Sin eso, lo
+   razonable habría sido creerse el campo afirmativo y dar el sitio por bueno, con un sitio
+   sin cabecera ni pie.
+
+**Qué haría:** que `regenerada` diga la verdad —comprobar la caché después de regenerar, que
+es una línea— y que `confirmado` se calcule contra `get_cache()->get_by_location()`, que aquí
+da la respuesta correcta en ambos sitios. El oráculo bueno ya está en la casa.
+
+## D Lo que tuve que hacer en PHP, que es el dato que se pedía
+
+```php
+\ElementorPro\Plugin::instance()->modules_manager
+  ->get_modules('theme-builder')->get_conditions_manager()->get_cache()->regenerate();
+```
+
+Una línea. Sin ella, el sitio entero se queda sin cabecera, sin pie y sin 404, con todos los
+datos guardados correctamente y tres herramientas diciendo que todo fue bien.
+
+**Es la misma línea que ya tuve que escribir en la fase 3 del registro de mcp1**, hace dos
+versiones del plugin. Es, hasta ahora, lo único de este encargo que no he podido hacer con
+herramientas.
+
+Coste: 4 llamadas de descarte + 1 de PHP + 1 de verificación.
+
+## ✅ `elementor_element_get` con `globales` encuentra algo que yo no buscaba
+
+Leí un widget de la cabecera para no destrozarle los iconos al reescribir su lista, y la
+respuesta trajo esto:
+
+```json
+"globales":{
+  "globals/colors?id=primary":"Principal (#6EC1E4)",
+  "globals/typography?id=c51acfe":"no existe en el kit de este sitio"
+}
+```
+
+Dos cosas de un vistazo. **#6EC1E4 es el azul de fábrica de Elementor**, no el color de
+RentForge. Y una tipografía del kit que **no existe**. Conclusión: los estilos globales del
+kit (`global.json`, la plantilla «Global Kit Styles») no se han aplicado, y el sitio se está
+pintando con los valores por defecto.
+
+Eso no lo dice ninguna otra herramienta, y yo no lo estaba buscando: salí a leer un icono y
+me encontré con que el kit está a medio instalar. En mcp1 pedí exactamente esto —«que
+`elementor_element_get` devuelva el color efectivo resuelto, no la referencia»— y el «no
+existe en el kit de este sitio» es mejor que lo que pedí.
+
+Queda pendiente aplicar los estilos globales del kit.
+
+## Nota sobre el modo de aprobaciones
+
+Entre la fase 1 y ésta, el modo de aprobaciones pasó a «nunca»: las condiciones que hace un
+rato pedían aprobación ahora se ejecutan solas, y la propia respuesta lo dice
+(*«Se ejecutó sin pedir aprobación porque el modo de aprobaciones está en "nunca"»*). Lo
+anoto porque cambia la postura de seguridad del resto de la sesión, y porque es un acierto de
+diseño que la respuesta lo declare en lugar de callarlo.
+
+## Estado al cerrar la fase 2
+
+Cabecera, pie y 404 aplicándose en todo el sitio, verificados en el HTML publicado. Cabecera
+traducida (barra superior, botón de presupuesto enlazado a `/reservar/`). Contacto y los 28
+titulares de la portada, escritos.
