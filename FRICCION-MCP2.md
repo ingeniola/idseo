@@ -712,3 +712,86 @@ le pasas `form_id` y sí `titulo`. O documentar el rodeo en la descripción de `
 Sitio visible por fin. Portada, Maquinaria y Contacto escritas y verificadas en el HTML
 publicado. Tres formularios de CF7 con sus correos y mensajes en español. Quedan las ocho
 fichas, Tarifas, Nosotros, Equipo, Opiniones, Blog, las cuatro legales, el menú y el SEO.
+
+---
+
+# Fase 5 — Me corrijo: `batch` + `cambios` cierran el hueco del aplicador en PHP
+
+En la fase 1 contesté que para trabajo sobre páginas clonadas **seguiría escribiendo el
+aplicador en PHP**, porque `post_id` es uno solo y las ocho fichas exigirían 16 llamadas
+contra una. **Eso estaba mal, y lo he comprobado haciéndolo.**
+
+## Lo que no había visto: las dos herramientas componen
+
+`cambios` resuelve el eje «muchos elementos». `batch` resuelve el eje «muchas páginas». Y se
+pueden anidar: un `batch` cuyos pasos son `elementor_element_update`, cada uno con su
+`post_id` y su lista de `cambios`.
+
+**Llamada real:** los 17 titulares de cada una de las 8 fichas de máquina.
+
+```json
+batch(pasos:[
+  {herramienta:"elementor_element_update", argumentos:{post_id:202, cambios:[…17…]}},
+  {herramienta:"elementor_element_update", argumentos:{post_id:203, cambios:[…17…]}},
+  … 8 pasos …
+])
+```
+
+**Respuesta:** `{"pasos":8,"ejecutados":8,"correctos":8, …}` con sus ocho revisiones para
+deshacer.
+
+> **136 elementos, 8 páginas, una sola ida y vuelta.**
+
+| llamada | elementos | páginas | respuesta | por elemento |
+|---|---|---|---|---|
+| Contacto | 15 | 1 | ~170 tok | 11,3 |
+| Portada, titulares | 28 | 1 | ~300 tok | 10,7 |
+| Portada, textos y contadores | 32 | 1 | ~520 tok | 16,3 |
+| Maquinaria | 41 | 1 | ~660 tok | 16,1 |
+| **8 fichas, titulares** | **136** | **8** | **~2.500 tok** | **18,4** |
+| 4 fichas, textos | 48 | 4 | ~900 tok | 18,8 |
+
+El coste por elemento sube de 11 a 18 tokens al meter `batch` por encima, porque cada paso
+repite su cabecera y su revisión. Dieciocho tokens por elemento. **En mcp1 eran ~1.600.**
+
+## La respuesta corregida a la pregunta
+
+**No. Con estos números no habría construido el aplicador en PHP.** Ni para una página ni
+para ocho clones.
+
+Las ocho fichas fueron **dos llamadas**: un `batch` de ocho `elementor_find` para mapear
+identificadores, y un `batch` de ocho `elementor_element_update` para escribirlos. El
+aplicador por rutas habría sido una llamada. **Dos contra una ya no justifica escribir y
+mantener código.**
+
+Y hay una diferencia que juega a favor de las herramientas y que no tenía en la ronda
+anterior: **cada paso devuelve su revisión**. Ocho puntos de vuelta atrás, uno por página.
+Mi aplicador en PHP no daba ninguno.
+
+## Dónde se rompería todavía
+
+Siendo honesto, queda un caso: **cuando el número de clones crece**, el `batch` deja de
+caber. Ocho páginas × 17 elementos es un payload de unos 9.000 caracteres. A cincuenta
+páginas de ciudad serían 56.000 y habría que partirlo en varios `batch` — lo cual sigue
+siendo viable, sólo menos cómodo.
+
+Y sigue en pie la propuesta de la fase 1, que ahora es una comodidad y no una necesidad: que
+`element_id` admita también una `ruta`. Con eso, las ocho fichas serían **una** llamada en
+lugar de dos, porque me ahorraría el `batch` de lectura: las rutas ya sé que son idénticas
+entre clones, sólo tengo que leerlas una vez.
+
+## Lo que me hizo equivocarme, que también es un dato
+
+Leí la descripción de `cambios` —«Para cambiar muchos elementos —el caso normal al maquetar—
+pasa cambios con todos de una vez»— y la de `batch` —«Ejecuta una secuencia de llamadas a
+otras herramientas, en orden, en una sola ida y vuelta»— y **no se me ocurrió juntarlas**
+hasta que me puse a hacer las ocho fichas de verdad.
+
+Ninguna de las dos descripciones menciona a la otra. La de `cambios` habla de «la misma
+página» —correcto, y por eso di por hecho que ahí se acababa—, y la de `batch` habla de
+herramientas en abstracto. Una frase en `cambios` del estilo *«para varias páginas, mete
+varias llamadas de éstas en un `batch`»* me habría ahorrado una conclusión equivocada
+publicada en un informe.
+
+Es el mismo patrón que llevo anotando desde mcp1, pero al revés y en bueno: **las dos mitades
+existen y sí se tocan, y nadie lo dice.**
