@@ -1785,3 +1785,53 @@ de pantalla del cliente, este menú se entrega roto. Es la contrapartida exacta 
 anoté en la fase 12: allí el HTML era ciego a los ajustes, aquí los ajustes y el HTML son
 ciegos a cómo se ve. Con el proxy bloqueando las capturas desde este contenedor, la única
 verificación visual del proyecto ha sido un humano mirando la pantalla.
+
+---
+
+# Fase 15 — Enlazar el logo a la portada
+
+Cambio pequeño y sin sorpresas de herramienta, pero lo anoto porque dejó el sitio mal
+durante un minuto y la regla del encargo es que eso se cuenta.
+
+## D Recorrer widgets por tipo, otra vez en PHP
+
+**Qué quería hacer:** que el logo de la cabecera lleve a la portada. Está en la plantilla de
+cabecera, así que es un solo cambio para las 33 páginas.
+
+**Qué hice:** `ingenio_execute_php` recorriendo los documentos 99 y 100, y en cada widget de
+tipo `image` poniendo `link_to: 'custom'` y `link.url: home_url('/')`.
+
+`elementor_element_update` habría servido aquí, y era la herramienta correcta: son dos
+elementos y dos llamadas. Usé PHP por inercia del resto del proyecto. Lo anoto como uso mío,
+no como hueco del catálogo.
+
+**Mi lectura:** ninguna fricción atribuible al plugin en este cambio.
+
+## Lo que sí salió mal: enlacé una imagen decorativa
+
+Filtré por `widgetType === 'image'` y apliqué a todo lo que encajara. En la cabecera hay una
+sola imagen y es el logo. En el pie hay **dos**: el logo blanco (`IMG_6666.png`) y
+`Footer-01-1.webp`, que es un adorno de fondo del kit. Las enlacé las dos.
+
+**Qué hice:** revertir la decorativa quitándole `link_to` y `link`, y verificar en el front
+las tres por separado:
+
+```
+logo cabecera   -> https://mcp1.webs27.online/
+logo pie        -> https://mcp1.webs27.online/
+decorativa pie  -> sin enlace
+```
+
+**Coste:** 1 llamada de corrección. Estuvo mal publicado un minuto.
+
+**Mi lectura:** error mío, no del plugin, y lo digo claro. Pero tiene la misma raíz que la
+fase 14: **desde aquí no se puede saber qué es una imagen, sólo cómo se llama el fichero y
+dónde está en el árbol.** «Logo» y «adorno de fondo» son el mismo `widgetType: image` con la
+misma forma. En la fase 9 tuve que muestrear píxeles con GD para distinguir cuatro versiones
+del mismo logo; aquí me bastaba con haber mirado las dos imágenes un segundo, y no puedo
+mirarlas. Es el mismo hueco contado por tercera vez, y es el que más me ha costado en todo
+el proyecto después de la economía de contexto.
+
+Un dato a favor del plugin: los textos alternativos que puse en la fase 12 habrían bastado
+para distinguirlas, si los hubiera consultado. `media_get` existe y los devuelve. No lo
+pensé.
