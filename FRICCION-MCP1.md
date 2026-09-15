@@ -847,3 +847,87 @@ Es un caso claro de "el servidor sabe hacer las dos mitades y no sabe unirlas", 
 `elementor_template_import`, que sabe importar plantillas pero no leerlas de disco. El patrón
 se repite: **todo lo que entra al sitio tiene que pasar por el contexto del modelo o por una
 URL pública**, y los dos caminos fallan justo con lo que más pesa — kits, imágenes, medios.
+
+### 🔬 El caso de las imágenes y los medios, entero
+
+Este merece contarse completo porque es el hueco más raro que me he encontrado: no es que falte
+una herramienta, es que **falta el camino de vuelta**.
+
+**Lo que no se puede hacer, en orden:**
+
+1. **Subir un fichero.** `media_upload` sólo acepta `url` pública. Ni bytes, ni base64, ni una
+   ruta del servidor. Si el fichero está en mi máquina y no en un sitio público, no entra.
+2. **Convertir en adjunto algo que ya está en el servidor.** `file_write` deja el fichero en
+   `uploads/` sin problema, pero no hay nada que lo registre como adjunto de WordPress. Sin ID
+   de adjunto no hay miniaturas, ni logo, ni imagen destacada, ni `site_icon`.
+3. **Leer una imagen.** `file_read` es sólo para texto. Las 17 herramientas de medios
+   (`media_list`, `media_get`, `media_update`...) devuelven **metadatos**: id, URL, mime, alt,
+   fecha. **Ninguna devuelve la imagen.** Puedo saber que existe un fichero de 1983×793 px
+   llamado `IMG_6665.png` y no tengo forma de saber qué hay dibujado dentro.
+
+**Por qué importa aquí:** el cliente subió cuatro logos por wp-admin con nombres de cámara
+—`IMG_6665`, `IMG_6666`, `IMG_6667`, `IMG_6668`— y yo tenía que colocar cada versión en su
+sitio: la de texto negro en la cabecera, la de texto blanco en el pie, el isotipo en el
+favicon. **Con las herramientas de medios eso es imposible**: los cuatro son "una imagen PNG".
+
+**Lo que hice, en dos pasos.**
+
+*Identificarlos sin verlos.* Por PHP, muestreando píxeles con GD:
+```
+354  1983x793   77% transparente · 18% negro ·  0% blanco · tinta a la derecha: 3839
+356  1983x793   80% transparente ·  0% negro · 16% blanco · tinta a la derecha:   26
+355  1254x1254   0% transparente · negro por tercios: 907 / 2698 / 2167
+357  1254x1254   0% transparente · negro por tercios: 872 / 2440 / 3477
+```
+De ahí sale todo: 354 y 356 son la misma pieza horizontal en versión oscura y clara (la
+"tinta a la derecha" de 26 en el 356 es el texto blanco, que mi filtro no cuenta como tinta).
+Entre los dos cuadrados, el 357 tiene **un 60% más de negro en el tercio inferior**: ahí está
+el rótulo "JARDINES DEL VALLE" debajo del dibujo. El 355 es el isotipo solo.
+
+*Verlos de verdad.* Sí se puede, pero el único camino es **hacer pasar los bytes por mi
+contexto**:
+```
+PHP: imagecopyresampled a 96px + imagejpeg + base64_encode
+  -> el base64 viaja dentro del JSON de respuesta a mi contexto
+  -> lo escribo a disco local con un heredoc y base64 -d
+  -> lo abro con la herramienta Read
+```
+Funciona. Vi la 357 y es exactamente lo que predijo el análisis. **Coste: ~3 KB de base64 por
+una miniatura de 96×96 px.** A tamaño original serían 1,3 MB, o sea unos 350.000 tokens por
+imagen. Inviable para cualquier cosa que no sea un sello.
+
+**Mi lectura.** Las dos mitades existen y no se tocan. El servidor sabe escribir ficheros en
+`uploads/` y sabe listar la biblioteca de medios, pero no hay puente entre las dos, ni en un
+sentido ni en el otro. Tres arreglos, por orden de lo que me habría servido:
+
+- **`media_upload` que acepte `contenido_base64` o `ruta`** además de `url`. Es el que
+  desbloquea el caso normal: el cliente te manda un logo y tú lo subes.
+- **`media_thumbnail(media_id, ancho)`** que devuelva una miniatura pequeña en base64. Con
+  128 px basta para reconocer un logo, una foto de producto o distinguir un "antes" de un
+  "después", y cuesta unos pocos kilobytes. **Sin esto, un agente no puede comprobar lo que
+  pone en una web.** Toda la maquetación va a ciegas sobre las imágenes.
+- **`media_register(ruta)`** para adjuntar algo que ya está en el disco.
+
+**Nota a favor, y buena:** cuando me equivoqué con los parámetros
+(`media_update(post_id, alt_text, title)`), el error fue de manual:
+```
+Argumentos no reconocidos: post_id, alt_text, title.
+Los válidos son: media_id, titulo, alt, leyenda, descripcion.
+```
+Dice qué está mal **y cuál es la lista correcta**. Lo arreglé en una llamada sin buscar nada.
+Si todos los errores de este servidor fueran así, la mitad de este documento no existiría.
+
+Y `batch` se comportó igual de bien al fallar: paró en el paso 2, dijo `"fallo_en": 2`, avisó
+de que los 3 siguientes no se intentaron y de que los 2 anteriores se quedaron hechos, con su
+revisión para deshacerlos. Exactamente lo que necesitas saber.
+
+**Verificación final del logo, que también hubo que hacer a mano.** Puse la versión blanca en
+el pie y me quedó la duda de si el fondo era oscuro de verdad — un logo blanco sobre fondo
+claro es invisible y no lo detecta ningún test. No hay herramienta que conteste "de qué color
+es el fondo detrás de este elemento", así que fui al CSS generado por Elementor:
+```
+.elementor-100 .elementor-element-fe2ce3e { background-color: var(--e-global-color-88e2e72) }
+88e2e72 = #000000
+```
+Negro. El logo blanco es el correcto. Tres llamadas para responder algo que un humano resuelve
+mirando la pantalla medio segundo.
