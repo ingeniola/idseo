@@ -1241,3 +1241,134 @@ conteste con un número, no con el widget entero.
 Proyectos (366) verificados en el front: 200, cero inglés, los tres con su intro, sus
 tarjetas, su bloque de «por qué» y los tres testimonios del encargo. Quedan FAQs, el
 archivo del blog, el cuerpo de las tres legales y la de Gracias.
+
+---
+
+# Fase 12 — FAQs, legales, blog y el inglés que no se veía
+
+## B Verificar por el HTML renderizado es ciego a lo que sólo se pinta cuando hay datos
+
+Durante once fases verifiqué cada página descargándola y buscando palabras en inglés. En
+esta fase hice por primera vez el barrido al revés: recorrer los **ajustes** de los
+documentos de Elementor en lugar del HTML.
+
+**Llamada:** un recorrido en PHP por los 38 documentos publicados (33 páginas + cabecera,
+pie, entrada, archivo y 404), buscando inglés en cualquier ajuste de texto.
+
+**Respuesta:** dos cosas que doce barridos de HTML no habían visto nunca.
+
+1. `ekit_blog_posts_btn_text = "Learn more "` en la portada (103) y en la plantilla de
+   archivo (131). No salía en el HTML porque el widget de entradas no pinta nada cuando no
+   hay entradas, y el blog está vacío.
+2. La plantilla de **entrada individual** (130) no tenía ni una sola etiqueta dinámica. El
+   título, los cuatro párrafos, las dos imágenes y el carrusel eran el artículo de
+   demostración del kit escrito a fuego: *«Top Sustainable Gardening Techniques For
+   Eco-Friendly Homes»*. Cualquier artículo que se publicara habría salido con ese título y
+   ese texto, no con el suyo.
+
+**Qué hice:** traducir los botones, y reconstruir la sección del cuerpo de la 130:
+`theme-post-featured-image` + `theme-post-content` en lugar de los seis widgets estáticos, y
+una etiqueta dinámica `post-title` sobre el `heading` para conservar el estilo del kit.
+Verificado creando una entrada de prueba, comprobando que sale su título y su texto, y
+borrándola.
+
+**Coste:** 5 llamadas. Pero el coste real es otro: si no llego a hacer este barrido, el
+sitio se entrega con una plantilla de blog rota y nadie se entera hasta el primer artículo.
+
+**Mi lectura:** fallo del plugin, y de los caros. `elementor_template_apply` copia el
+contenido de demostración de una plantilla de entrada individual tal cual, incluidos el
+título y el cuerpo del artículo de ejemplo, y contesta `{"accion":"contenido
+sustituido","elementos":N}`. Una plantilla de tipo `single-post` sin una sola etiqueta
+dinámica es, por definición, una plantilla que no funciona. El servidor sabe el tipo de
+documento (`single-post`), sabe que no hay `__dynamic__` en ningún widget y podría decirlo
+en el mismo resultado: «aplicada, pero esta plantilla de entrada no tiene ningún campo
+dinámico: todas las entradas mostrarán el mismo texto». No dice nada.
+
+Esto es el mismo patrón que llevo anotando desde la fase 2, una cuarta vez: **la
+herramienta escribe el dato correcto, omite lo que hace que el dato sirva, y contesta que
+todo fue bien.**
+
+## A No hay forma de auditar el texto de un sitio a nivel de ajustes
+
+Relacionado con lo anterior. `content_analyze` y `seo_audit` miran el contenido renderizado.
+`content_search` busca en `post_content`, que en un sitio Elementor está vacío o duplicado.
+
+**Qué quería hacer:** «dime todo el texto literal que hay en los documentos de Elementor de
+este sitio, con su ruta, para poder revisarlo de un vistazo». Es la pregunta que se hace
+cualquiera que hereda un sitio hecho con un kit.
+
+**Qué hice:** escribirlo yo en PHP. Cuatro veces en el proyecto, cada vez un poco distinto.
+
+**Coste:** difícil de contar. La primera versión que escribí en esta fase se me fue de las
+manos: el patrón encajaba también con nombres de fichero de imagen y el resultado salió de
+1,2 millones de caracteres, que el servidor cortó y volcó a fichero. Dos llamadas perdidas
+por un error mío, pero un error que no habría cometido con una herramienta que sepa
+distinguir un ajuste de texto de una URL.
+
+**Mi lectura:** hueco claro. La herramienta que falta es `elementor_text_audit(post_ids,
+buscar?)`: recorre los documentos, devuelve sólo los ajustes de texto visible con su ruta y
+su widget, y opcionalmente filtra por una expresión. Con 161 herramientas y ocho de ellas
+dedicadas a leer estructura de Elementor, que no exista la que lee el texto es raro.
+
+## A No se puede cambiar un widget por otro
+
+Las cinco páginas de FAQs, Gracias y las tres legales usan la misma plantilla: dos
+acordeones de cinco preguntas. Para las legales un acordeón es mal sitio: el aviso de
+privacidad y los términos se leen de corrido.
+
+**Qué quería hacer:** convertir esos dos `elementskit-accordion` en dos `text-editor`
+conservando su posición y su contenedor.
+
+**Llamadas disponibles:** `elementor_element_remove` + `elementor_element_add`. Son dos
+llamadas por widget, ocho en total para cuatro páginas, y el `add` necesita que le digas
+dónde insertar por `element_id` del padre, que hay que ir a buscar antes.
+
+**Qué hice:** sustituir el nodo entero en PHP conservando el `id` original, para no romper
+el CSS generado que ya apunta a ese identificador.
+
+**Coste:** 1 llamada en lugar de 12 aproximadas.
+
+**Mi lectura:** límite razonable, pero con un hueco de diseño detrás. `elementor_element_update`
+cambia ajustes; no hay nada que cambie el **tipo**. En un sitio hecho con kit, «esta sección
+está bien colocada pero el widget no es el que necesito» es una operación constante. Un
+`elementor_element_replace(post_id, ruta_o_id, widget_type, settings)` que conserve el `id`
+sería la herramienta más usada del lote.
+
+## D Todo lo demás de esta fase, en PHP
+
+Sin herramienta propia y resuelto con `ingenio_execute_php`:
+
+- Crear las seis categorías del blog (`wp_insert_term`). Hay `content_set_terms` para
+  asignar términos a un contenido, pero nada para **crear** una taxonomía o un término.
+- Poner el texto alternativo a 32 imágenes de la mediateca. `media_update` acepta `alt`,
+  pero son 32 llamadas con su acuse de recibo. Lo hice con un `update_post_meta` en bucle.
+- Repartir una imagen distinta a cada una de las 19 páginas de servicio y proyecto, y rotar
+  las seis fotos del carrusel, para que no fueran las mismas seis en todas.
+- Poner la etiqueta dinámica `post-title`. Existe `elementor_element_set_dynamic`, y es la
+  herramienta correcta; no la usé porque ya estaba dentro de la llamada PHP que rehacía la
+  sección entera. Lo anoto como uso mío, no como hueco.
+
+**Mi lectura:** de estos cuatro, el único hueco real es el primero. No poder crear un
+término desde el servidor, teniendo `content_set_terms` para asignarlo, es una asimetría
+que obliga a bajar a PHP para algo que hace cualquier editor de WordPress.
+
+## Lo que queda raro en el sitio, dicho explícitamente
+
+**El blog está vacío.** `/blog/` responde 200 y pinta el H1, la miga y la intro, y después
+no hay nada: cero entradas. El encargo pone los doce artículos en «pendientes para la
+siguiente fase», así que no los he escrito. Pero el blog está en el menú principal y en el
+pie, y hoy lleva a una página que se queda a medias. El widget `elementskit-blog-posts` no
+tiene ajuste de «mensaje cuando no hay entradas», así que no se puede ni poner un aviso sin
+tocar el widget. **Esto hay que resolverlo antes de que el sitio sea público**: o se
+publican los primeros artículos, o se quita el blog del menú hasta que los haya.
+
+**Las fotos son las del kit.** Las 19 páginas de servicio y proyecto llevan ahora una foto
+principal distinta cada una y el carrusel rotado, pero siguen siendo fotos de banco de un
+kit de jardinería genérico: no hay ni un jardín de Honduras ni una cuadrilla de Jardines del
+Valle. Los textos alternativos que puse describen lo que la foto **representa** en su sitio,
+no lo que la foto es. Con fotos reales hay que revisarlos.
+
+**Los cuatro formularios envían a `hola@jardinesdelvalle.hn`,** que es un dominio que no
+existe. En esta instalación de pruebas todo lo que se envíe va a rebotar. Es lo correcto
+para el encargo y lo incorrecto para probar: si se quiere ver un envío completo, hay que
+cambiar el destinatario de los cuatro formularios de Contact Form 7.
