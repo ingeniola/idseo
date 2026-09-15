@@ -2042,3 +2042,104 @@ Corrijo también lo que escribí al final de la fase 14: dije que la única veri
 del proyecto había sido un humano mirando la pantalla. Es peor que eso: **ha sido un humano
 mirando la pantalla de un escritorio.** La versión móvil de este sitio no la ha visto nadie
 todavía, ni él ni yo.
+
+---
+
+# Fase 18 — El menú móvil, visto por fin
+
+Capturas del cliente desde un iPhone. El menú desplegable se ve así: las ocho entradas
+alineadas **a la derecha**, cada una sobre una franja blanca, y entre franja y franja **se ve
+la página de fondo** —el titular del hero asomando a trozos entre las entradas del menú—.
+Inservible, y feo de una manera que no admite discusión.
+
+Esto es **después** de la corrección de la fase 17, que yo había dado por buena mirando el
+CSS generado. Segundo aviso en dos fases de lo mismo: el CSS decía lo correcto y el resultado
+era otro.
+
+## Lo que estaba pasando, y lo que yo creía que pasaba
+
+Mi primera hipótesis fue que las franjas eran los **siete contenedores vacíos** que el widget
+obliga a crear (uno por entrada del menú, aunque sólo Servicios tenga desplegable). Lo
+comprobé antes de tocar nada:
+
+```php
+substr_count($html, '8fdc8f9')  // contenedor vacío de "Inicio"
+→ 0
+```
+
+Ninguno de los siete está en el DOM. Hipótesis descartada en una llamada, y menos mal, porque
+iba a "arreglar" algo que no existía.
+
+La causa real son dos cosas distintas que se suman:
+
+1. **El panel desplegable no tiene fondo.** `.e-n-menu-wrapper` trae
+   `background-color: transparent` del CSS del widget, y el único control de fondo que expone
+   el catálogo, `content_background_color_color`, no pinta el panel: su selector es
+   `... > .e-n-menu-content > .e-con`, o sea el **contenido** de cada desplegable, no el
+   contenedor de la lista. Las entradas tienen fondo propio y los huecos entre ellas no. Por
+   eso se ve la página entre línea y línea.
+2. **`--n-menu-title-justify-content-mobile: flex-end`.** Herencia de haber puesto
+   `item_position_horizontal: 'end'` para que en escritorio el menú vaya pegado a la derecha,
+   junto al botón. En móvil, dentro de un panel a todo el ancho, eso deja los textos pegados
+   al borde derecho.
+
+**Qué hice:**
+
+```php
+'item_position_horizontal_tablet'  => 'start',   // y _mobile
+'menu_item_title_space_between_mobile'  => 0,    // el hueco entre entradas
+'menu_item_title_padding_mobile' => '15px 20px',
+// y el fondo, que no tiene control, por CSS propio:
+'@media(max-width:1024px){ selector .e-n-menu-wrapper{
+    background-color: var(--e-global-color-f45b7f8);   // blanco del kit
+    border-radius:0 0 14px 14px; box-shadow:0 14px 34px rgba(0,0,0,.14); }
+  selector .e-n-menu-heading{row-gap:0;}
+  selector .e-n-menu-item>.e-n-menu-title{border-bottom:1px solid var(--e-global-color-d61c747);}
+}'
+```
+
+Comprobado en el CSS generado: en `max-width:1024px` y en `max-width:767px` ahora salen
+`--n-menu-title-justify-content: initial`, `--n-menu-title-space-between: 0px` y
+`--n-menu-title-padding: 15px 20px`, y el bloque propio con el fondo blanco.
+
+**Coste:** 4 llamadas, más las dos capturas del cliente.
+
+## A El control de fondo del desplegable no pinta el desplegable
+
+Merece entrada propia porque es un hueco de verdad, no un error mío.
+
+El widget expone un grupo entero de controles llamado **«Fondo del contenido desplegable»**
+(`content_background_color_*`), con su color, su degradado, su imagen y hasta su presentación
+de diapositivas con efecto Ken Burns. Su selector es:
+
+```
+:where( {{WRAPPER}} > .e-n-menu > .e-n-menu-wrapper > .e-n-menu-heading
+        > .e-n-menu-item > .e-n-menu-content ) > .e-con
+```
+
+Es decir: pinta el **contenedor de contenido de cada entrada**, que en escritorio es el panel
+del mega menú —y que yo ya tenía en blanco por otra vía— pero **no pinta nunca**
+`.e-n-menu-wrapper`, que es la caja que envuelve la lista y la única que importa en móvil.
+
+O sea: en el modo donde el widget más necesita un fondo sólido —desplegable a pantalla
+completa sobre el contenido de la página— **no hay ningún control que lo ponga.** La única
+salida es CSS propio, otra vez.
+
+**Mi lectura:** es de Elementor, no del servidor MCP. Pero lo anoto porque completa un patrón
+que ya llevo tres veces en este widget: `content_width` que acepta valores inválidos (fase
+14), `--n-menu-heading-wrap` sin control (fase 14), y ahora un grupo de controles de fondo que
+no cubre el elemento que hace falta. **En las tres, la salida fue escribir CSS a mano.** Un
+widget cuyo uso real exige CSS propio tres veces en dos días no está terminado, y eso el
+catálogo de herramientas no lo puede saber ni avisar.
+
+## Lo que no puedo decir
+
+**No sé si esto ha quedado bien.** Es la segunda corrección a ciegas del mismo menú: la de la
+fase 17 la di por buena leyendo el CSS generado y estaba mal. Ahora he vuelto a leer el CSS
+generado y vuelve a decir lo correcto. Es exactamente la misma evidencia que me falló hace
+dos fases.
+
+Lo digo tal cual en lugar de dar el trabajo por cerrado: hace falta otra captura del teléfono.
+Y hace falta, en general, lo que pedí en la fase 16 con el ancho como parámetro, porque este
+menú lleva ya tres rondas —escritorio roto, móvil roto, móvil roto otra vez— y las tres las ha
+encontrado una persona mirando la pantalla, no yo.
