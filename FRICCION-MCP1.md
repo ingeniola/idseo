@@ -983,3 +983,89 @@ respuesta**; el harness la volcó a un fichero y tuve que consultarla con `jq`. 
 `buscar` existe precisamente para eso, pero con `buscar:"form"` seguían saliendo 322 de 506
 controles, porque en este widget *todas* las claves llevan `form` en el nombre
 (`ekit_contact_form_...`). Un `limite` o un `solo_claves:true` lo resolvería.
+
+## Fase 9 — Todos los formularios a CF7
+
+Cuatro formularios creados y colocados con el widget `elementskit-contact-form7`, que se estila
+con las variables globales del kit:
+
+| Dónde | Formulario | Campos |
+|---|---|---|
+| Contacto | `Contacto` (11) | nombre, teléfono, correo, ciudad, servicio, mensaje |
+| Cotización | `Cotización` (375) | 12 campos, incluidas 5 subidas de foto |
+| Portada | `Cita rápida` (393) | nombre, teléfono, correo, ciudad, fecha |
+| Pie (todo el sitio) | `Newsletter` (394) | correo |
+
+MetForm quedó sin uso y lo desactivé: no renderizaba nada y seguía cargando 4 JS
+(`htm.js`, `index.js` ×2, `cute-alert.js`) en **todas** las páginas del sitio.
+
+### A — No hay forma de crear un formulario de CF7
+
+Hay `cf7_list`, `cf7_get` y `cf7_update`, pero **no `cf7_create`**. Los tres formularios nuevos
+no tenían dónde nacer.
+
+**Qué hice:** `content_create(post_type: "wpcf7_contact_form")` para crear el post vacío y luego
+`cf7_update` para escribirle la plantilla. Funcionó a la primera.
+
+**Mi lectura:** **hueco menor y con apaño limpio**, lo anoto por completitud. Dicho eso, el
+apaño sólo funciona si ya sabes que CF7 guarda sus formularios en un tipo de contenido llamado
+`wpcf7_contact_form` y que la plantilla vive en un metadato que `cf7_update` sabe escribir. Eso
+no lo dice ninguna descripción: lo supe por conocer CF7, no por el servidor. Un `cf7_create`
+—o una línea en `cf7_update` diciendo "si el formulario no existe, créalo antes con
+`content_create` y `post_type: wpcf7_contact_form`"— lo resuelve.
+
+### 🔴 B — `cf7_update` escribe, y el sitio sigue sirviendo la versión anterior
+
+**Qué pasó.** El formulario del newsletter salía en el front con **la etiqueta literal en vez
+del campo**:
+```html
+<form class="wpcf7-form init">
+  ...
+  <p>[email* correo placeholder "Su correo electrónico" autocomplete:email]</p>
+  <input type="submit" value="Suscribirme" />
+```
+El `[submit]` sí se renderizó; el `[email*]` no.
+
+**Mi primer diagnóstico fue equivocado.** Pensé que era orden de opciones —CF7 quiere las
+opciones antes de los valores entrecomillados— y reescribí la etiqueta. **Siguió igual.**
+
+**El diagnóstico bueno.** Fui a preguntar por los dos caminos a la vez:
+```
+cf7_get(394)                              -> "campos": ["correo"]     <- CF7 sí lo reconoce
+do_shortcode('[contact-form-7 id="394"]') -> <input name="correo">    <- se renderiza bien
+la misma página por HTTP                  -> [email* correo ...]      <- la etiqueta cruda
+```
+Y lo definitivo: **el HTML servido traía la plantilla con el orden de opciones ANTERIOR a mi
+corrección.** No era un fallo de sintaxis, era una copia vieja. Un `wp_cache_flush()` y salió
+bien a la primera.
+
+**Coste:** 5 llamadas persiguiendo una hipótesis falsa + 2 de diagnóstico + 1 de arreglo. Y
+estuve a punto de dejarlo como "cosa rara de CF7".
+
+**Mi lectura.** Es **el cuarto caso del mismo patrón**, y tiene guasa porque le pasa justo a la
+herramienta que elogié hace dos páginas por ser la única que valida su propio efecto:
+
+| Herramienta | Escribió bien | No hizo |
+|---|---|---|
+| `elementor_template_apply` | `_elementor_data` | marcar la página como Elementor |
+| `elementor_template_conditions` | `_elementor_conditions` | regenerar la caché de ubicaciones |
+| `seo_update` | `rank_math_title` | (Rank Math sin configurar) |
+| **`cf7_update`** | **la plantilla del formulario** | **invalidar la caché de objetos** |
+
+`cf7_update` comprueba una cosa —que las etiquetas del correo existan como campos— y es
+excelente en eso. Pero no comprueba la otra: **que lo que escribió sea lo que el visitante ve.**
+Un `wp_cache_flush()` al final de la escritura, o al menos un
+`"aviso": "si el sitio usa caché de objetos, el formulario viejo puede seguir sirviéndose"`,
+habría evitado todo esto.
+
+Y lo peor del caso es cómo se manifiesta: **el formulario no desaparece, se llena de basura
+visible.** Un formulario de suscripción que en vez de una caja de correo enseña
+`[email* correo placeholder "Su correo electrónico"]` en el pie de las 32 páginas del sitio.
+Se ve, pero sólo si alguien mira; ningún test de los que he ido haciendo —HTTP 200, sin inglés,
+sin enlaces vacíos, widgets renderizados— lo habría cazado. Lo cacé porque conté campos de
+formulario, y eso lo hice por casualidad.
+
+**Herramienta que echo de menos, otra vez la misma idea:** algo tipo `cache_flush()` expuesto,
+o que las escrituras lo hagan solas. El servidor ya llama a
+`\Elementor\Plugin::$instance->files_manager->clear_cache()` en algunos sitios; le falta hacer
+lo propio con la caché de objetos de WordPress.
