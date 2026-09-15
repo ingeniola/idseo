@@ -637,3 +637,182 @@ demo en los formularios— y cuando falla no te avisa: te devuelve `"px"` con to
 naturalidad, y si te fías, te saltas un widget con texto en inglés dentro. El arreglo es
 mapear la clave de contenido por tipo de widget (`title` en heading, `editor` en text-editor,
 `text` en button) en vez de adivinar.
+
+### 🔴 A — Los repetidores no se pueden parchear: o los reescribes enteros, o nada
+
+**Qué quería:** cambiar el nombre, el cargo y el texto de 3 testimonios, y el título y
+contenido de 5 preguntas del acordeón. Nueve campos de texto en total.
+
+**Lo que dice la herramienta** (`elementor_element_update`):
+> "Los mapas se mezclan clave a clave; **las listas (repetidores: diapositivas, elementos de
+> menú) se sustituyen enteras.**"
+
+**El problema:** un ítem de `elementskit-testimonial` tiene **51 claves**. No son decorativas:
+```
+client_photo: {"id":59,"url":".../01.webp"}
+client_logo:  {"id":81,"url":".../placeholder.png"}
+client_logo_active, link, ekit_testimonial_background_group_color_stop,
+ekit_testimonial_background_group_gradient_angle, ..._slideshow_gallery,
+..._slideshow_slide_duration: 5000, ... (y 40 más)
+```
+Para cambiar tres textos tengo que reenviar **51 claves × 3 ítems = 153 campos**, y si me dejo
+`client_photo` fuera, los tres clientes se quedan sin foto. En un widget que no avisa de nada.
+
+**Qué hice:** leer el documento con la API de Elementor, parchear **sólo** los tres campos de
+texto de cada ítem conservando las otras 48 claves intactas, y guardar por el pipeline oficial
+para que se regenerara el CSS y quedara revisión:
+```php
+$doc = \Elementor\Plugin::$instance->documents->get(103);
+$data = $doc->get_elements_data();
+// ... $base = $items[$i]; $base['review'] = '...';   // conserva las 51 claves
+$doc->save(['elements' => $data]);
+```
+
+**Coste:** 2 llamadas de PHP y una de reconocimiento previo para contar las claves.
+
+**Mi lectura:** **el segundo hueco más grave, después del coste de contexto.** Y los dos son el
+mismo problema visto desde dos ángulos: la herramienta no sabe hablar de *una parte* de un
+widget. Para los mapas sí —los fusiona clave a clave, y eso está muy bien resuelto—, pero se
+rinde justo donde más falta hace, porque **los repetidores son donde vive el contenido
+editorial**: testimonios, FAQ, listas de precios, diapositivas, pestañas. Es literalmente lo
+que uno va a querer cambiar en un sitio ya montado.
+
+Lo que falta es un direccionamiento de ítem:
+```
+elementor_element_update(post_id, element_id,
+  repetidor: "ekit_testimonial_data", indice: 0,
+  ajustes: {client_name: "Rosa Elena Padilla", review: "..."})
+```
+o aceptar `_id` del ítem en vez del índice, que es más estable. Con eso, mis nueve campos
+habrían sido nueve líneas en un `batch` en lugar de bajar a PHP.
+
+Segunda observación, esta a favor: la descripción **avisa** de que los repetidores se
+sustituyen enteros. Si no lo dijera, yo habría mandado `[{text:"..."},{text:"..."}]` tan
+tranquilo y habría borrado las fotos de los tres clientes sin enterarme. La advertencia me
+ahorró un desastre silencioso. El problema no es que mienta: es que la limitación no debería
+existir.
+
+### G — Adivinar la clave de enlace de un widget de terceros
+
+**Qué quería:** poner enlace a los 7 botones `jkit_button` de la portada (los CTA principales:
+"Cotizar mi jardín", "Ver servicios"...). En el kit venían **sin enlace**: el HTML del front
+era `<a href="">`.
+
+**Qué pasó:** listé las 41 claves del widget y **no hay ninguna de enlace**, porque el kit
+nunca lo puso. Así que no tenía de dónde deducirla. Probé `sg_content_link` con la forma
+estándar de Elementor (`{url, is_external, nofollow}`) por analogía con `sg_content_label`.
+
+**Resultado:** aceptada y guardada.
+
+**Coste:** 1 llamada de reconocimiento. Acerté a la primera, pero por analogía, no porque nada
+me lo dijera.
+
+**Mi lectura:** **límite razonable, con un arreglo obvio disponible.** Ningún servidor MCP
+puede documentar los widgets de todos los plugins de terceros del mundo. Pero este servidor
+**ya tiene** `elementor_widget_schema`, y ahí está la respuesta: un esquema me habría dicho el
+nombre y el tipo del control sin que yo tuviera que adivinar. Lo que falta es que las
+descripciones de `elementor_element_update` y `elementor_element_add` **manden a consultarlo**:
+"si no conoces las claves de ajuste de un widget, pídelas antes con `elementor_widget_schema`".
+Yo tenía esa herramienta cargada desde el principio y no se me ocurrió usarla hasta después,
+porque nada me apuntó a ella en el momento en que la necesitaba.
+
+### ✅ y C — `seo_update`: buen error, buenos avisos, y una promesa de aprobación que no cumple
+
+**Primer intento, sin Rank Math instalado:**
+```
+[not_supported] Rank Math no está activo en este sitio.
+Comprueba con site_info qué hay instalado antes de usar estas herramientas.
+```
+**Error impecable**: dice qué falta, por qué falla y con qué herramienta comprobarlo. En dos
+segundos supe qué hacer. Así deberían ser todos.
+
+**Los avisos de cada escritura también valen:**
+```
+"avisos":["El título SEO tiene 72 caracteres y Google suele recortar a partir de 60.",
+          "Sin palabra clave objetivo: Rank Math no puede puntuar el contenido."]
+```
+Esto me hizo ver algo que yo no habría mirado: **9 de los 24 títulos SEO que trae el documento
+del cliente pasan de 60 caracteres** y Google los va a recortar. Un dato que sale gratis, en
+el momento correcto, sin que lo pidiera.
+
+**Lo que no cuadra.** La descripción dice:
+> "Poner noindex en algo publicado, o cambiar la URL canónica, **necesita aprobación humana**:
+> son cambios invisibles en la web cuyo efecto es que el tráfico deje de llegar."
+
+Puse `index: "noindex"` en `/gracias/` (que es lo correcto para una página de gracias) y pasó
+sin aprobación. Y el motivo que dio la propia herramienta **no es el modo de aprobaciones**:
+```
+"aviso":"... Se ejecutó sin pedir aprobación porque tiene vuelta atrás:
+         history_restore con revision=214 la deshace."
+```
+O sea: la descripción dice "necesita aprobación humana", y el código dice "no hace falta
+porque es reversible". **Son dos criterios distintos conviviendo en la misma herramienta.**
+Es el tercer caso de este registro en que la descripción y el comportamiento no coinciden
+(los otros: `elementor_template_conditions` y `option_update`), y ya no parece casualidad:
+da la sensación de que las descripciones se escribieron describiendo la intención del diseño
+y el código evolucionó después sin volver a ellas.
+
+### 🔴 B — `seo_update` guarda bien y el sitio no emite nada (tercera vez el mismo patrón)
+
+**Qué pasó:** apliqué title y meta descripción a las 24 páginas con `seo_update`. Todas
+devolvieron éxito, con la URL, el título guardado y avisos útiles. Fui a comprobarlo al front:
+
+```
+<title>Jardines del Valle &#8211; Áreas verdes que se ven bien todo el año</title>
+<meta name="description" content="">      <- no existía
+```
+
+El título del tema por defecto. **Ninguna de las 24 páginas emitía su SEO.** Los datos sí
+estaban guardados:
+```
+get_post_meta(103,'rank_math_title')       -> "Servicios de jardinería en Honduras | ..."
+get_post_meta(103,'rank_math_description') -> "Mantenimiento de jardines, paisajismo, ..."
+get_option('rank_math_wizard_completed')   -> false      <- aquí está el problema
+```
+
+Rank Math recién instalado **no emite etiquetas hasta que se completa su asistente de
+configuración**. `seo_update` escribe el metadato correcto en un plugin que todavía no está
+sirviendo nada.
+
+**Qué hice:** completar la configuración por PHP (`rank_math_wizard_completed`,
+`registration_skip`, tipo y nombre de entidad). Tras eso, el front:
+```
+<title>Servicios de jardinería en Honduras | Jardines del Valle</title>
+<meta name="description" content="Mantenimiento de jardines, paisajismo, poda, riego...">
+```
+
+**Coste:** 3 llamadas de diagnóstico + 1 de arreglo, después de 24 escrituras que yo ya había
+dado por buenas.
+
+**Mi lectura:** **es el tercer caso idéntico del mismo patrón, y el que confirma que es
+sistémico, no casualidad.**
+
+| Herramienta | Escribió bien | No hizo | Resultado visible |
+|---|---|---|---|
+| `elementor_template_apply` | `_elementor_data` | marcar la página como Elementor | página publicada sin estilos |
+| `elementor_template_conditions` | `_elementor_conditions` | regenerar la caché de ubicaciones | cabecera que no sale |
+| `seo_update` | `rank_math_title/description` | nada — el plugin no está configurado | 24 páginas sin SEO |
+
+En los tres, **el dato queda perfecto y el efecto no ocurre, y la herramienta responde éxito.**
+El tercero es el más venenoso de los tres porque el SEO **no se ve nunca mirando la web**: si
+no se me ocurre leer el `<title>` del HTML, entrego 24 páginas sin metadatos y nadie se entera
+hasta que alguien mira Search Console tres meses después.
+
+Aquí ni siquiera pido que la herramienta arregle nada: **con que lo dijera bastaría.** Los 17
+tools de SEO ya saben detectar que falta Rank Math —`seo_update` da un error excelente cuando
+el plugin no está activo— así que comprobar `rank_math_wizard_completed` y devolver
+`"aviso": "Rank Math está activo pero sin configurar: lo guardado no se emite todavía"` es
+la misma comprobación una capa más adentro. La diferencia entre un dato guardado y un dato que
+sirve es justo lo que este servidor no está mirando en ningún sitio.
+
+### Nota de contenido, no de fricción: los títulos SEO del cliente
+
+Los avisos de `seo_update` destaparon que **9 de los 24 títulos que trae el documento pasan de
+60 caracteres** y Google los va a recortar. Acorté tres donde el recorte se comía la marca
+(`/cobertura/`, `/planes-de-mantenimiento/`, `/servicios/jardines-verticales/`) y dejé el resto
+tal como venía: son decisión del cliente, no mía. Los que siguen largos:
+`/servicios/` (69), `/servicios/areas-verdes-empresas/` (68), `/servicios/grama-sintetica/` (68),
+`/servicios/instalacion-de-grama-natural/` (72), `/servicios/diseno-de-jardines-paisajismo/` (64),
+`/servicios/tala-de-arboles/` (64), `/servicios/sistemas-de-riego/` (62),
+`/servicios/mantenimiento-de-jardines/` (61), `/servicios/fertilizacion-y-suelos/` (61),
+`/servicios/limpieza-de-terrenos/` (61).
