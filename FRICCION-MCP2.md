@@ -1497,3 +1497,155 @@ esto sería una llamada tool-native en vez de una consulta SQL de tres niveles.
 Nueve plantillas leídas de principio a fin. **Cero inglés en el sitio.** Los dieciséis
 botones, los iconos sociales, la dirección, las migas y las ocho secciones de blog vacías,
 corregidos.
+
+---
+
+# Fase 10 — El aviso de Rank Math miraba la bandera equivocada, y yo me lo creí
+
+Terminaste el asistente y comprobé el resultado. Rank Math emite todo: `<title>`,
+`<meta name="description">`, `robots`, `canonical`, las etiquetas `og:` y el JSON-LD. Hasta
+aquí, lo esperado.
+
+Lo que no esperaba es que **el aviso siguiera saliendo**.
+
+## B El aviso consulta una opción que Rank Math no escribe nunca
+
+```
+seo_update(post_id: 189, titulo: "...")
+→ "avisos": ["OJO: Rank Math tiene el asistente de configuración sin terminar, y hasta
+   que se termine NO emite ninguna etiqueta en el front..."]
+```
+
+Y en la misma página, en ese mismo momento:
+
+```
+content_render(189, alcance: "pagina", buscar: "name=\"description\"")
+→ aparece: true
+   <title>Alquiler de maquinaria de obra en Zaragoza | Altorre</title>
+   <meta name="description" content="Excavadoras, grúas, cargadoras y compactadoras..."
+```
+
+Las dos cosas no pueden ser verdad. Fui a las opciones:
+
+```
+option_get("rank_math_wizard_completed") → {"exists": false}
+option_get("rank_math_is_configured")    → {"exists": true, "value": "1"}
+```
+
+Y la lista completa de opciones del plugin, que las tiene todas:
+
+```
+rank_math_is_configured · rank_math_registration_skip · rank_math_modules ·
+rank_math_install_date · rank_math_version · rank-math-options-titles · …
+```
+
+**`rank_math_wizard_completed` no está, y no va a estar: Rank Math no usa ese nombre.**
+La bandera real es `rank_math_is_configured`. El aviso comprueba una opción inexistente,
+la encuentra vacía, y concluye que el asistente está sin terminar. Siempre. En cualquier
+sitio con Rank Math, esté configurado o no.
+
+Es un falso positivo permanente, y de los caros: va pegado a **cada** llamada de
+`seo_update`, así que en esta sesión salió **veinticinco veces seguidas**, una por cada
+página y entrada a las que escribí el SEO.
+
+## G Y ahora lo mío, que es peor
+
+En la fase 7 escribí esto, y lo escribí como un elogio:
+
+> «**Esto es un acierto grande del servidor**, y quiero que quede escrito con el mismo
+> detalle que las quejas: sin ese aviso habría entregado veinticinco títulos y descripciones
+> perfectamente guardados y perfectamente invisibles.»
+
+Y luego cerré la fase con «SEO **emitido en el front**: **no**» en la tabla de estado, y se
+lo dije así en tres mensajes seguidos, incluida una lista de «lo que falta para publicar».
+
+**No comprobé ni una vez si era verdad.** Una llamada. La misma llamada que había usado
+veinte veces esa tarde para verificar todo lo demás:
+`content_render(189, alcance: "pagina", buscar: "name=\"description\"")`. No la hice porque
+el aviso venía de la propia herramienta que acababa de hacer la escritura, y a esa le
+concedí una autoridad que no me había ganado.
+
+No puedo saber a posteriori si el asistente estaba terminado ya en la fase 7 —las opciones
+de WordPress no llevan fecha— así que no sé si el sitio estuvo o no sin etiquetas. Y da
+igual: el problema no es haber acertado o fallado, es que **afirmé como hecho algo que no
+verifiqué, teniendo la verificación a un tecleo**.
+
+Es el mismo fallo de la fase 9 con los botones en inglés, dos fases después y sin haber
+aprendido nada: **fiarme de un indicador en vez de mirar la página**. Allí el indicador era
+mi propio barrido por palabras; aquí, un aviso del servidor. En los dos casos el error fue
+tratar una señal negativa («no encontré nada» / «esto no se emite») como una conclusión.
+
+La regla que me faltaba, escrita para que no se me olvide otra vez: **un aviso de una
+herramienta es una hipótesis, no un hecho.** Si dice que algo no se ve en el front, se abre
+el front.
+
+## Lo que el asistente dejó mal, que sí había que arreglar
+
+Aunque el aviso fuera falso, terminar el asistente destapó cosas reales. El bloque `titles`
+de Rank Math seguía con los valores que puso el kit al importarse:
+
+| Ajuste | Estaba | Ahora |
+|---|---|---|
+| `knowledgegraph_name` | **«MCP 2»** | Altorre Maquinaria |
+| `website_name` | **«MCP 2»** | Altorre Maquinaria |
+| `local_business_type` | `Organization` | `HomeAndConstructionBusiness` |
+| `opening_hours` | L–D **09:00–17:00** | L–V 07:00–19:00 · S 08:00–13:00 · D cerrado |
+| `knowledgegraph_logo` | vacío | el logotipo nuevo |
+| dirección, teléfono, correo | vacíos | los de la empresa |
+| `404_title` | **«Page Not Found %sep% %sitename%»** | «Página no encontrada…» |
+
+El nombre en el grafo de conocimiento era **«MCP 2»**, que es como se llamaba el sitio
+cuando se importó el kit. Eso es lo que Google habría leído como nombre de la empresa. Y el
+título del 404 era el último inglés que quedaba en el sitio, escondido en una plantilla de
+título de Rank Math donde ningún barrido del contenido lo iba a encontrar —ni el de
+palabras de la fase 7, ni el de texto renderizado de la fase 9, porque no está en ninguna
+página de Elementor—.
+
+Verificado en el front: `{"@type":["HomeAndConstructionBusiness","Organization"],
+"name":"Altorre Maquinaria", "address":{...}}`.
+
+## ✅ La puerta de aprobación, bien calibrada esta vez
+
+```
+"aviso": "Cambiar los ajustes globales de SEO (titles). Afecta a cómo se presenta el sitio
+entero en los buscadores, no a una página. Se ejecutó sin pedir aprobación porque tiene
+vuelta atrás: history_restore con revision=366 la deshace."
+```
+
+Compárese con la fase 8, donde el mismo servidor dijo *«no se puede deshacer»* y ejecutó
+igual porque el modo estaba en «nunca». **Aquí la razón para no parar es la correcta: hay
+revisión.** El plugin distingue bien entre «peligroso pero reversible» y «irreversible»; lo
+que no distingue es que el modo «nunca» apaga las dos por igual.
+
+## E `seo_settings_update` devuelve el bloque entero
+
+Cambié doce claves y la respuesta trajo **las ciento sesenta** del bloque `titles`: unos
+3.500 tokens para confirmar doce. Es el mismo patrón que `elementor_page_settings_update`
+en la fase 3. La lista `cambiadas` que ya viene en la respuesta es exactamente lo que hace
+falta; el volcado completo sobra salvo que se pida.
+
+## Dónde estaba el logotipo: en tres sitios, no en dos
+
+Al colocar el logotipo nuevo (adjunto 476) busqué las dos imágenes obvias —cabecera y pie—
+y `elementor_find` no encontró ninguna tercera. Pero una consulta a la base de datos sí:
+
+```json
+"elementskit_nav_menu_logo": {"url": ".../logo-img.png", "id": 437}
+```
+
+Es un ajuste **dentro del widget del menú**: el logotipo que sale en el panel desplegable
+en móvil. Ni es un widget `image`, ni tiene texto, así que no aparece en ninguna búsqueda
+por tipo ni por contenido. Sólo lo encontré porque se me ocurrió preguntar a la base de
+datos si quedaba algún `logo-img.png` vivo.
+
+Otra pieza del mismo rompecabezas: **las cosas que no son ni texto ni widget** —fondos de
+contenedor (fase 7), identificadores de adjunto (fase 8), logotipos dentro de otro widget
+(aquí)— son las que se escapan de todas las herramientas de búsqueda que tiene el servidor.
+
+## Estado
+
+SEO emitido y verificado en portada, ficha, contacto y entrada. Schema con el nombre, la
+dirección, el teléfono y el horario reales. Logotipo nuevo en los tres sitios. **Cero
+inglés**, ahora sí, incluida la plantilla de título del 404.
+
+Queda una sola cosa, y es tuya: el sitio **no tiene favicon** (`site_icon` está a `0`).
