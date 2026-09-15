@@ -905,3 +905,321 @@ Pendiente de decisión: las imágenes.
 
 **Bajadas a PHP: dos**, las dos a la misma línea de regeneración de la caché del theme
 builder.
+
+---
+
+# Fase 7 — Cerrar el sitio: el resto de páginas, el blog, lo legal y el SEO
+
+Esta fase termina el encargo. Lo que se escribió: Tarifas, Nosotros, Equipo, Opiniones,
+Reservar, Blog, las cuatro páginas legales, cuatro artículos, el pie entero, la 404, el SEO
+de las 21 páginas y 4 entradas, y el barrido final del inglés que quedaba. Salieron
+cuatro cosas nuevas que anotar, una de ellas grave y una de ellas la que más me interesaba.
+
+## 📏 Tercera medición, ya con páginas completas
+
+| llamada | elementos | páginas | respuesta | por elemento |
+|---|---|---|---|---|
+| Tarifas (191), todo | 37 | 1 | ~700 tok | 18,9 |
+| Nosotros (193), todo | 49 | 1 | ~900 tok | 18,4 |
+| Equipo (194), todo | 19 | 1 | ~360 tok | 18,9 |
+| Reservar (192), todo | 20 | 1 | ~380 tok | 19,0 |
+| 8 fichas: listas y contadores | 96 | 8 | ~1.900 tok | 19,8 |
+
+La cifra se ha estabilizado en **18–20 tokens por elemento** escrito, y no sube con el
+tamaño del lote. Contra los ~1.600 tokens por elemento de mcp1, sigue siendo **unas 85×
+menos**, y en el pico de la fase 6 (136 elementos en una llamada) fue 145×. La respuesta
+de `elementor_element_update` con `cambios` es lineal y corta: una línea por elemento
+con las claves aplicadas, y una sola revisión de deshacer por llamada.
+
+El tope práctico ya no es la respuesta: es **mi propia petición**. Al intentar meter los
+seis testimonios (con foto, cargo y cita) en tres páginas dentro de un solo `batch`, el
+JSON que mandé se cortó a mitad y el servidor devolvió `InputValidationError`. No es un
+fallo del plugin —el mensaje de error está bien escrito y dice exactamente qué pasó—, pero
+sí es el límite real: **a partir de unos 3,5 KB de argumentos conviene partir la llamada**.
+Con texto corto eso son ~50 elementos; con repetidores grandes, tres.
+
+## B Un error que señala a la causa equivocada: la página de entradas
+
+Escribí el contenido de Blog (196) y me encontré esto, dos veces seguidas:
+
+**Llamada:**
+```
+elementor_element_update(post_id: 196, cambios: [8 elementos])
+```
+**Respuesta:**
+```
+[internal] Elementor rechazó el guardado sin dar motivo. Suele pasar cuando el
+documento está bloqueado por otra sesión de edición abierta.
+```
+
+No había ninguna sesión de edición abierta. La causa real es otra: **196 era la página
+asignada como "página de entradas"** (`page_for_posts`), y Elementor se niega a guardar
+el documento de esa página porque WordPress no renderiza su contenido.
+
+Lo comprobé en firme:
+
+```
+option_update(page_for_posts, "0")   → ok
+elementor_element_update(196, ...)   → {"aplicados": 8}
+option_update(page_for_posts, "196") → ok
+```
+
+Mismo documento, mismos cambios, mismo minuto. Lo único que cambió fue la opción.
+
+**Qué hice:** quitar la asignación, escribir, devolverla. Tres llamadas donde debería
+haber una.
+
+**Coste:** dos llamadas perdidas y unos veinte minutos buscando un bloqueo que no existía,
+porque el mensaje me mandó a mirar sesiones de edición.
+
+**Mi lectura:** el diagnóstico que arriesga el mensaje ("suele pasar cuando…") es una buena
+idea mal calibrada. Aquí manda a buscar donde no es. La comprobación que falta es trivial:
+si `post_id === get_option('page_for_posts')`, decirlo. Sería la diferencia entre veinte
+minutos y cero. Y que Elementor rechace sin motivo no es culpa del servidor, pero traducir
+ese silencio a una causa concreta y equivocada sí lo es: preferiría un "Elementor rechazó
+el guardado y no dice por qué" a secas.
+
+## 🔬 `elementor_text_audit`: el experimento que faltaba, hecho por otra vía
+
+En la fase 0 anoté que esta herramienta rechaza `post_ids` en cualquier forma, y pedí que
+otra sesión la probara para saber si el fallo estaba en mi cliente o en el plugin. No hizo
+falta esperar: **`batch` responde la pregunta**, porque los `argumentos` de cada paso los
+deserializa el servidor, no mi cliente.
+
+```
+batch(pasos: [
+  { herramienta: "elementor_text_audit", argumentos: { post_ids: [161] } },
+  { herramienta: "elementor_text_audit", argumentos: { post_ids: [161,163], buscar: "Quick" } }
+], seguir_si_falla: true)
+```
+
+**Respuesta:**
+```
+{"pasos":2,"ejecutados":2,"correctos":0,"detalle":[
+  {"paso":0,"ok":false,"error":"No hay ningún contenido con el identificador 0.","categoria":"not_found"},
+  {"paso":1,"ok":false,"error":"No hay ningún contenido con el identificador 0.","categoria":"not_found"}]}
+```
+
+Idéntico. Y el resto de pasos de ese mismo `batch`, en llamadas anteriores, con arrays
+(`cambios`, `icon_list` con cuatro objetos anidados) funcionaron perfectamente en la misma
+sesión y por el mismo camino.
+
+**Conclusión, ahora sí con prueba:** el fallo está **dentro de `elementor_text_audit`**, no
+en el transporte ni en mi cliente. El array llega; lo que pasa es que en algún punto se
+convierte a entero (`(int)"[161]"` es `0`, y `(int)[161]` en PHP es `1`, así que lo más
+probable es una conversión desde la cadena). Ya no hace falta que lo pruebe nadie más.
+
+**Lo que cuesta que esta herramienta no funcione,** medido en esta fase: el barrido final
+del inglés lo tuve que hacer a mano, con `elementor_find(texto: "…")` sobre cada página y
+cada palabra sospechosa. Fueron **cinco tandas de doce búsquedas**. Y no es equivalente:
+`elementor_find` sólo encuentra lo que yo se me ocurra buscar.
+
+## Lo que encontró ese barrido a mano, y lo que dice de él
+
+Después de dar por escritas las páginas en fases anteriores, quedaba en inglés:
+
+- **El pie entero** (plantilla 163): el eslogan, los tres títulos de columna, las tres
+  listas de enlaces, el teléfono `+61 3 8376 6284`, el correo `Info@rentforge.com`, la
+  dirección de Melbourne y el copyright de RentForge. **Sale en las 21 páginas.**
+- La **404** (185): titular, texto y botón.
+- En la portada: la tira de garantías bajo el héroe, la lista de "Por qué Altorre" y los
+  ocho chips de sectores.
+- En Maquinaria (190): los cinco contadores y tres de las cinco listas.
+- En las **ocho fichas**: los cinco contadores y las siete listas de cada una, 96 elementos.
+- En Contacto (197): el **widget de Google Maps seguía apuntando a `21 King Street
+  Melbourne, 3000, Australia`**.
+
+Todo eso son widgets que **no tienen ni `title` ni `editor`**: son `icon-list` (repetidor),
+`counter` (`title` + `ending_number` + `suffix`) y `google_maps` (`address`). Por eso
+sobrevivieron a cuatro fases de reescritura: yo iba por tipos de widget conocidos, y estos
+se me escapaban uno a uno.
+
+**Y ése es exactamente el trabajo de `elementor_text_audit`.** No es una herramienta
+cómoda que me ahorra escribir: es la única que contesta "¿qué queda en inglés?" sin que yo
+tenga que adivinar en qué ajuste vive cada trozo de texto. Con ella rota, un sitio
+aparentemente terminado tenía el pie en inglés y un mapa de Australia. El mapa lo encontré
+por casualidad, buscando la palabra "Our" en Contacto.
+
+Si hay que priorizar un arreglo de esta ronda, es éste.
+
+## A Rank Math guarda el SEO y no lo publica, y no hay herramienta para arreglarlo
+
+Escribí el SEO de las 21 páginas y las 4 entradas. Las 25 llamadas devolvieron este aviso:
+
+```
+"avisos":["OJO: Rank Math tiene el asistente de configuración sin terminar, y hasta que
+se termine NO emite ninguna etiqueta en el front. Lo que se guarda aquí queda bien
+guardado, pero el buscador seguirá sin verlo. Se arregla una sola vez en wp-admin, en
+Rank Math → Asistente de instalación."]
+```
+
+**Esto es un acierto grande del servidor**, y quiero que quede escrito con el mismo
+detalle que las quejas: sin ese aviso habría entregado veinticinco títulos y descripciones
+perfectamente guardados y perfectamente invisibles, y lo habría dado por hecho. Es el tipo
+de fallo que no se ve mirando la web ni mirando wp-admin.
+
+**El problema es lo que viene después.** Comprobé el estado:
+
+```
+option_get("rank-math-options-general") → existe, en español, setup_mode "advanced",
+                                          módulos configurados
+option_get("rank_math_modules")         → 14 módulos activos
+option_get("rank_math_wizard_completed")→ {"exists": false, "writable": true}
+```
+
+Rank Math está configurado. Lo único que falta es la bandera. Y `option_update` me dice
+que esa clave es **escribible y no está bloqueada**: podría ponerla a mano ahora mismo.
+
+**No lo he hecho, y es una decisión, no un olvido.** Dos razones: no sé si esa es la clave
+que Rank Math consulta de verdad (hay al menos dos candidatas y no voy a adivinarlo a base
+de escribir opciones en un sitio en producción), y el asistente escribe más cosas que la
+bandera. Poner el flag y que el plugin empiece a emitir etiquetas con media configuración
+puesta es peor que no emitir ninguna.
+
+**Esto no se puede hacer con las herramientas que tengo.** Hay `seo_settings_update`, pero
+sólo toca `general`, `titles` y `sitemap`; no hay nada que termine el asistente. Y el
+propio aviso lo dice: "se arregla en wp-admin".
+
+**Mi lectura:** el aviso es correcto y salva el trabajo, pero deja al agente en un callejón:
+detecta el problema, sabe cuál es la causa, tiene permiso de escritura sobre la opción y
+aun así la vía sensata es pedirle a una persona que entre en wp-admin. Una herramienta
+`seo_setup_complete` —aunque pidiera aprobación— cerraría el círculo. Tal y como está, el
+SEO de este sitio está escrito pero no publicado, y hace falta un clic humano.
+
+## A/B El kit no trae el formulario de la plantilla de reservas
+
+La plantilla **Book Equipment** del kit es, por su nombre y por su diseño, la página donde
+va el formulario de reserva. Al mirar el contenedor donde debería estar:
+
+```
+elementor_outline(192)
+  55fde9a
+    43efb4c  heading  "Reserve Heavy Construction Equipment in Minutes"
+    7b4e8bd  text-editor
+    e916b87  container
+      4c96234  container
+        0d0e2fe  icon-list   ← "OSHA-Compliant Equipment · Well-Maintained Fleet · …"
+```
+
+No hay formulario. Sólo una tira de garantías. Lo mismo pasa con los tres bloques de
+"últimas entradas" del kit (portada, Tarifas, Opiniones, Blog): **contenedores vacíos**,
+sin el widget de bucle.
+
+Es el mismo patrón que anoté en la fase 1 con el formulario de contacto: el kit declara
+plugins que el servidor no puede instalar (fase 0, entrada A), y los widgets de esos
+plugins se pierden en la importación **sin que nadie lo diga**. La plantilla se importa
+"correctamente" y llega con agujeros donde estaban las piezas que importan.
+
+**Qué hice:** rellenar los huecos con lo que sí hay. Un `shortcode` con CF7 en Reservar y
+en la portada, y el widget `posts` de Elementor Pro en los tres contenedores vacíos.
+
+```
+elementor_element_add(192, padre: "e916b87", posicion: 0,
+  { elType: "widget", widgetType: "shortcode",
+    settings: { shortcode: "[contact-form-7 id=\"246\"]" } })
+→ {"element_id":"0fecb91"}
+```
+
+Y verificado en el HTML publicado, que es lo que vale:
+
+```
+content_render(192, alcance: "pagina", buscar: "wpcf7")
+→ {"aparece": true, "contexto": "…<div class=\"wpcf7 no-js\" id=\"wpcf7-f246-p192-o1\"…"}
+```
+
+**Coste:** seis llamadas (dos `add` de formulario, tres de `posts`, y las verificaciones).
+Barato. Lo caro fue darse cuenta: el `outline` no dice "aquí falta algo", dice
+"contenedor vacío", y un contenedor vacío puede ser perfectamente intencionado.
+
+**Mi lectura:** no pido que el servidor instale plugins (eso ya está anotado como A en la
+fase 0). Pido que `elementor_template_import` **cuente lo que descartó**. El JSON del kit
+sabe qué `widgetType` traía cada elemento; los que no existen en el sitio se caen en
+silencio. Un `"descartados": [{"widget": "wpforms", "ruta": "2.1.0"}, …]` en la respuesta
+de la importación habría ahorrado las dos veces que esto me ha pasado en este sitio.
+
+## ✅ `content_render` con `buscar` es la herramienta de verificación que hacía falta
+
+Lo anoto como acierto porque en mcp1 me faltó y aquí lo he usado en casi todas las
+verificaciones de esta fase:
+
+```
+content_render(189, alcance: "pagina", buscar: "elementor-posts")
+→ {"bytes": 191803, "aparece": true, "contexto": "…elementor-grid-3 …widget-posts…"}
+```
+
+La página son **191 KB**. La respuesta son **40 palabras**. Sin `buscar` esto no se puede
+hacer: en mcp1 tuve que sacar el HTML a fichero y mirarlo con python, y en la fase 4 de
+este sitio comparé tamaños en bytes para deducir que la 404 se estaba comiendo el cuerpo.
+Con `buscar` la verificación cuesta lo mismo que la escritura, y por eso he verificado
+todo en vez de verificar una muestra. Es un cambio de comportamiento, no una comodidad.
+
+## E Copiar un widget de una página a otra: no se puede, se reescribe entero
+
+Los mismos seis testimonios van en cuatro páginas (portada, Tarifas, Nosotros, Reservar) y
+en la de Opiniones. Son el mismo repetidor: seis objetos con nombre, cargo, cita y foto,
+unos 3 KB de JSON.
+
+**Lo que quería:** escribirlo una vez y copiarlo.
+**Lo que hay:** nada. `elementor_element_duplicate` copia dentro de la misma página.
+`elementor_element_replace` cambia el tipo de un widget, no lo trae de otro sitio.
+`elementor_template_save_as` + `elementor_template_apply` habría metido la sección entera
+con su contenedor y sus estilos, no el contenido de un widget.
+
+**Qué hice:** mandar el mismo bloque de 3 KB **cuatro veces**.
+
+**Coste:** unos 5.200 tokens de petición para escribir el mismo dato cuatro veces. Es, con
+diferencia, la parte más cara de toda la fase: más que las 96 escrituras de las ocho
+fichas juntas.
+
+**Mi lectura:** no hace falta una herramienta nueva. Bastaría con que `elementor_element_update`
+aceptara **varios `post_id`** para los mismos `ajustes`, igual que `cambios` acepta varios
+elementos de la misma página. El caso "el mismo bloque en N páginas" es tan normal como el
+caso "N bloques en la misma página", y sólo uno de los dos está resuelto.
+
+## G Dónde me equivoqué yo, para que conste
+
+1. **Di por escritas páginas que no lo estaban.** En la fase 6 cerré las ocho fichas
+   contando sólo titulares y textos. Se quedaron 96 elementos en inglés que sólo vi en el
+   barrido final. El error es mío: `elementor_find(widget: …)` me daba el censo completo
+   por tipo de widget en cada respuesta —`counter: 5`, `icon-list: 7`— y no lo leí.
+   El dato estaba delante y lo ignoré cuatro fases seguidas.
+2. **El pie.** Nunca lo abrí. Lo di por hecho porque había tocado el menú de la cabecera.
+3. **Los sectores no cabían.** El kit trae siete chips y el encargo tiene ocho sectores.
+   En la portada y en Nosotros dupliqué un chip con `elementor_element_duplicate` en vez
+   de recortar el contenido al molde. Una llamada por página, y el molde deja de mandar
+   sobre el contenido.
+
+## Decisiones de contenido que tomé y conviene que se sepan
+
+- **El blog.** El encargo dejaba los artículos para más adelante, pero un blog vacío
+  enlazado desde el menú principal no es publicable. Escribí **cuatro entradas**, una por
+  categoría, y creé las cuatro categorías con `content_terms` (que sí permite slug y
+  descripción, cosa que `content_set_terms` no).
+- **Las páginas legales** llevan datos ficticios: NIF `B-99123456`, domicilio inventado y
+  datos registrales inventados. Están escritas con la estructura correcta (LSSI, RGPD,
+  cookies, condiciones generales de alquiler), pero **el NIF y los datos registrales hay
+  que sustituirlos antes de publicar de verdad**. Lo digo aquí porque es el tipo de cosa
+  que se queda puesta.
+- **La página de Equipo** usa la plantilla "Team Detail" del kit, que está pensada para
+  **una** persona. La reconvertí: la línea de tiempo de la carrera profesional es ahora el
+  "quién es quién" de las cuatro personas más taller y transporte. El molde daba cinco
+  filas y el encargo tenía cuatro personas: encajó.
+
+## Estado al cerrar la fase 7
+
+| | |
+|---|---|
+| Páginas escritas en español | 21 de 21 |
+| Entradas de blog | 4, con categoría |
+| Plantillas (cabecera, pie, 404) | en español |
+| Formularios CF7 colocados | 3 de 3 (57 Contacto, 246 Reservar, 247 portada) |
+| SEO escrito | 21 páginas + 4 entradas |
+| SEO **emitido en el front** | **no** — falta terminar el asistente de Rank Math en wp-admin |
+| Imágenes | siguen enlazadas a `stackkrew.com` (fase 6, sin resolver) |
+| Bajadas a PHP en esta fase | **ninguna** |
+| Elementos escritos en esta fase | 268 |
+| Llamadas de escritura en esta fase | 21 |
+
+Las dos cosas que impiden decir "publicable" sin peros son las mismas de siempre y ninguna
+es de contenido: **las imágenes de un dominio ajeno** y **el asistente de Rank Math sin
+terminar**. Las dos necesitan una decisión o un clic de una persona.
