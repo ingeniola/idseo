@@ -570,3 +570,145 @@ trabajar en lote.
 Paleta y tipografías del kit aplicadas (#1F2328 · #F4B400 · #6B6B6B, Anton e Inter), con los
 H1–H6, cuerpo, enlaces y botones atados a ellas. Portada escrita entera salvo listas de
 iconos y testimonios. Cabecera traducida. Contacto escrito.
+
+---
+
+# Fase 4 — La plantilla 404 borró el sitio entero, y la pista estaba escrita
+
+El fallo más gordo de este encargo, y es mío a medias. Lo cuento entero porque el reparto de
+culpa es justo lo interesante.
+
+## Qué pasó
+
+Al montar el theme builder puse a las tres plantillas la misma condición:
+
+```
+elementor_template_conditions(161, ["include/general"])   ← Cabecera   ✔ correcto
+elementor_template_conditions(163, ["include/general"])   ← Pie        ✔ correcto
+elementor_template_conditions(185, ["include/general"])   ← 404        ✘ desastre
+```
+
+La 404 no lleva condiciones: Elementor la aplica sola cuando no encuentra la página. Al
+darle `include/general`, Elementor Pro la registró en la ubicación **`single`**, y una
+plantilla en `single` **sustituye el cuerpo de todas las páginas singulares del sitio.**
+
+Resultado: las 21 páginas escritas, con su contenido perfectamente guardado, y el visitante
+viendo cabecera, pie y **nada en medio**. Durante toda la fase 3 estuve escribiendo contenido
+en un sitio que no mostraba contenido.
+
+## Cómo lo encontré, y por qué tardé
+
+Lo cacé al añadir el formulario de contacto: lo puse, lo verifiqué y no aparecía. Descarté
+por orden: el widget estaba en el dato (`elementor_find` lo encontraba en `2.1.1`), regeneré
+el CSS de la página, comprobé que el titular de al lado tampoco salía, y de ahí a comprobar
+que **ninguna página del sitio dibujaba su cuerpo**.
+
+La prueba definitiva vino de mirar la clase del `<body>`:
+
+```
+class="... elementor-page-189 elementor-page-185"
+```
+
+**185 es la 404.** Ahí estaba, pintándose encima de la 189.
+
+Y comparando los dos alcances de `content_render`:
+
+| | bytes | ¿sale el contenido? |
+|---|---|---|
+| `alcance:"contenido"` | 96.380 | **sí**, con todo el marcado de Elementor |
+| `alcance:"pagina"` | 86.146 | no |
+
+Ese contraste es el diagnóstico en dos líneas: el documento está bien, lo que falla es lo que
+el sitio decide pintar. Tener los dos alcances en la misma herramienta vale su peso.
+
+## ✅ Crédito donde toca: la nota de `content_render` acertó a la primera
+
+Cada vez que algo no aparecía, la herramienta contestaba:
+
+> *«Si el dato sí está guardado, el cambio se escribió pero no se ve: revisa **si una
+> plantilla del theme builder lo está sustituyendo**, si el elemento quedó dentro de algo
+> oculto, o si hay caché por delante.»*
+
+**La primera de las tres hipótesis era exactamente la causa.** Yo leí esa nota cuatro veces
+antes de hacerle caso, empeñado en que era caché. Es la mejor nota de error que he visto en
+este plugin y me la salté por cabezonería. Lo anoto contra mí.
+
+## B Pero el plugin dejó pasar algo que sabía que estaba mal
+
+`elementor_template_conditions` aceptó `include/general` sobre una plantilla cuyo tipo es
+`error-404`, y el efecto fue vaciar el sitio entero.
+
+El servidor **sabe** el tipo: `elementor_templates` lo lista como `"tipo":"error-404"`. Y su
+propia respuesta lo dice, en el campo que yo no leí con atención:
+
+```json
+"efecto":"La condición está guardada pero Elementor Pro TODAVÍA NO la aplica en \"single\"."
+```
+
+Le pedí condiciones para una 404 y me contestó hablando de **`single`**. La pista estaba
+escrita en la respuesta, en un campo que además es nuevo de esta versión. Pero está escrita
+como dato de paso, no como aviso.
+
+**Lo que debería hacer:** rechazarlo, o avisar en mayúsculas. Algo del estilo:
+
+> «Esta plantilla es de tipo `error-404`. Elementor la aplica sola cuando no encuentra una
+> página; no necesita condiciones. Una condición general la registra en `single` y
+> **sustituye el cuerpo de todas las páginas del sitio**. ¿Seguro?»
+
+El `aviso` genérico que sí salta —«una condición general cambia el aspecto de todas a la
+vez»— es verdad pero no distingue entre cambiar la cabecera de todas las páginas, que es lo
+normal, y vaciarlas, que no lo es. Y esto es precisamente el tipo de operación para la que
+existe la puerta de aprobación: si el modo de aprobaciones no hubiera estado en «nunca»,
+alguien habría leído qué iba a pasar.
+
+## D Segunda bajada a PHP, la misma línea
+
+Para que el arreglo surtiera efecto hubo que regenerar la caché de ubicaciones otra vez:
+
+```php
+...->get_conditions_manager()->get_cache()->regenerate();
+```
+
+Con la condición ya quitada, la caché seguía diciendo `{"185":["include/general"]}`. La
+herramienta volvió a contestar `"regenerada":true`. Van **dos bajadas a PHP en este encargo,
+las dos por lo mismo.**
+
+## Verificado después del arreglo
+
+| página | antes | después |
+|---|---|---|
+| Portada | 86 KB, sin cuerpo | **177 KB**, con «Nuestra flota» y todo el contenido |
+| Contacto | sin formulario | `<form class="wpcf7-form">` con el formulario de presupuesto |
+| Maquinaria | sin cuerpo | «Retroexcavadoras mixtas» y las ocho familias |
+
+## ✅ Lo que sí salió redondo en esta fase
+
+**`cf7_update` cazó un error real.** Al reescribir el formulario de contacto avisó de que la
+segunda plantilla de correo —la de respuesta automática, que yo no había tocado— seguía
+usando `[your-subject]` y `[your-message]`, campos que ya no existían:
+
+> *«CF7 enviará el correo con la etiqueta literal dentro en vez del valor, y eso no da ningún
+> error: simplemente llegan los avisos con corchetes.»*
+
+Es el único sitio de todo el plugin donde una herramienta valida el **efecto** de lo que
+acaba de escribir, y aquí me ahorró publicar tres formularios que mandan correos con
+corchetes. Además contesta `"cache":"invalidada"`, que era el arreglo de la 1.8.0.
+
+## A No se puede crear un formulario de CF7
+
+Hay `cf7_list`, `cf7_get` y `cf7_update`. No hay `cf7_create`. Necesitaba tres formularios y
+sólo existía uno.
+
+**Qué hice**, sin bajar a PHP: crear el post con `content_create(post_type:
+"wpcf7_contact_form")` y rellenarlo después con `cf7_update`. Funciona perfectamente y es
+razonable, pero hay que saberse el nombre interno del tipo de contenido, que no aparece en
+ninguna descripción.
+
+**Mi lectura:** hueco pequeño con solución fácil: que `cf7_update` cree el formulario si no
+le pasas `form_id` y sí `titulo`. O documentar el rodeo en la descripción de `cf7_list`.
+
+## Estado al cerrar la fase 4
+
+Sitio visible por fin. Portada, Maquinaria y Contacto escritas y verificadas en el HTML
+publicado. Tres formularios de CF7 con sus correos y mensajes en español. Quedan las ocho
+fichas, Tarifas, Nosotros, Equipo, Opiniones, Blog, las cuatro legales, el menú y el SEO.
