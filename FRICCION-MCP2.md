@@ -487,3 +487,86 @@ diseño que la respuesta lo declare en lugar de callarlo.
 Cabecera, pie y 404 aplicándose en todo el sitio, verificados en el HTML publicado. Cabecera
 traducida (barra superior, botón de presupuesto enlazado a `/reservar/`). Contacto y los 28
 titulares de la portada, escritos.
+
+---
+
+# Fase 3 — Estilos globales del kit, y la medición otra vez
+
+## A Los estilos globales del kit no los importa nadie
+
+Venía del hallazgo de la fase 2: `globals/colors?id=primary` daba **#6EC1E4**, el azul de
+fábrica de Elementor, y una tipografía del kit que «no existe en el kit de este sitio».
+
+**Primer intento, el camino obvio:**
+
+```json
+elementor_template_import(ruta:".../templates/global.json", tipo:"kit")
+→ {"template_id":238, "tipo":"kit", "elementos":0}
+```
+
+**Cero elementos.** Correcto y a la vez inútil: `global.json` no tiene `content`, tiene
+`page_settings`. La herramienta importa contenido, y los estilos globales de un kit no son
+contenido. Creó una plantilla vacía que luego hubo que tirar.
+
+**Qué hice:** leer el fichero con `file_read` (26 KB) y aplicarlo a mano en dos llamadas:
+
+1. `elementor_kit_update` con los 4 colores del sistema, 3 propios, 4 tipografías del sistema
+   y 12 propias. Funcionó a la primera y devolvió lo que dejó guardado.
+2. `elementor_page_settings_update(post_id:17)` con el bloque `__globals__` que ata H1…H6,
+   cuerpo, enlaces y botones a esos colores y tipografías, más los puntos de ruptura y el
+   radio de los botones.
+
+Verificado: un título de la portada que antes apuntaba a una tipografía inexistente ahora
+resuelve a `400-20`, y `secondary` a `#FFFFFF`.
+
+**Coste:** 1 llamada perdida, 1 de lectura de 26 KB, 2 de escritura, 2 de verificación.
+
+**Mi lectura:** hueco de diseño, hermano del de los plugins que faltaban. Importar un kit son
+cuatro cosas —plugins, plantillas, estilos globales, imágenes— y el servidor hace muy bien
+una. Lo que falta aquí es pequeño y concreto: que `elementor_template_import`, al ver
+`metadata.template_type == "global-styles"`, aplique `page_settings` al kit activo en vez de
+crear una plantilla vacía. Toda la información está en el fichero; sólo hay que mirar el
+campo que el propio kit rellena para decírtelo.
+
+## B `elementor_page_settings_update` devuelve el documento entero
+
+El hermano pobre del arreglo estrella de esta versión.
+
+**Llamada:** 7 claves (el bloque `__globals__`, los breakpoints y dos radios).
+
+**Respuesta:** `Error: result (62,924 characters) exceeds maximum allowed tokens.` Volcada a
+fichero. Dentro, **970 claves**: los ajustes completos del kit, incluidos los 12 bloques de
+tipografía y los 7 colores que acababa de escribir en la llamada anterior.
+
+La escritura funcionó —lo comprobé leyendo el volcado— pero la respuesta es exactamente el
+problema que `elementor_element_update` ya no tiene. Ahí se arregló devolviendo sólo las
+claves aplicadas; aquí sigue devolviendo el mundo.
+
+**Mi lectura:** el mismo arreglo, aplicado al sitio de al lado. `{"post_id":17,
+"aplicados":["__globals__","viewport_md", …], "deshacer":{…}}` diría lo mismo en 200 bytes.
+Y con `devolver_ajustes` para quien lo necesite, igual que el `devolver_elemento` que ya
+existe.
+
+## 📏 Segunda medición: 32 elementos en una llamada
+
+La más grande hasta ahora: los 23 textos, 3 botones y 6 contadores de la portada.
+
+| | entrada | respuesta | por elemento |
+|---|---|---|---|
+| Portada, 32 elementos | ~3.900 car. ≈ 1.050 tok | 1.980 car. ≈ **520 tok** | **16,3 tok** |
+
+Sube de 11 a 16 tokens por elemento porque los contadores y los botones cambian tres claves
+cada uno y la respuesta las lista todas. Sigue siendo la misma proporción: **la respuesta
+depende de lo que cambias, no de lo que el widget tiene dentro.**
+
+**A 32 elementos sigue sin ser incómodo.** Lo que empieza a pesar es lo que ya dije: componer
+32 textos definitivos de una vez. Y se me coló un error de escritura —«La montañon Jesús
+Bandrés» por «La montaron»— que estuvo publicado hasta que releí mi propia llamada. Eso no es
+del protocolo, es de escribir 32 cosas sin releerlas de una en una, y es el coste real de
+trabajar en lote.
+
+## Estado al cerrar la fase 3
+
+Paleta y tipografías del kit aplicadas (#1F2328 · #F4B400 · #6B6B6B, Anton e Inter), con los
+H1–H6, cuerpo, enlaces y botones atados a ellas. Portada escrita entera salvo listas de
+iconos y testimonios. Cabecera traducida. Contacto escrito.
