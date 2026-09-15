@@ -483,3 +483,157 @@ página real el JSON completo son cientos de kilobytes y casi todo sobra"*. El s
 el problema y luego lo comete en la herramienta de al lado. Con devolver sólo `{id, cambiado:
 ["elementskit_nav_menu"], deshacer}` bastaría; o un parámetro `devolver: "minimo"|"completo"`.
 Repetido 6 veces en esta sesión, es contexto que no me pude gastar en trabajo.
+
+---
+
+# Parte 2 — Encargo real: Jardines del Valle
+
+Sitio de una empresa de jardinería y paisajismo en Honduras. 33 páginas en alcance
+(el propio documento deja fuera, explícitamente, las 18 páginas de ciudad y los 12
+artículos del blog: "Pendientes para la siguiente fase").
+
+## Fase 5 — Estructura de páginas
+
+### ✅ Lo que funcionó: `batch`
+
+Es la herramienta que hace viable este volumen. Crear las 12 páginas de servicio, las 6 de
+proyecto y las 6 sueltas fueron **4 llamadas** en vez de 24; aplicar plantilla a 23 páginas
+fueron **4 llamadas** en vez de 46. Su descripción es honesta donde importa: *"No es una
+transacción: lo ya ejecutado se queda hecho, y por eso devuelve la revisión de cada paso"*.
+Eso es exactamente lo que necesitas saber antes de mandar 12 pasos de golpe.
+
+Una pega: **la respuesta de `batch` repite el `aviso` completo de cada paso**. Doce pasos de
+`elementor_template_apply` devolvieron doce veces el mismo párrafo de "Se descartan los 0
+elementos que tiene la página. Quedan en el historial, pero nadie los recupera...". El aviso
+está bien escrito y es útil una vez; doce veces seguidas es ruido que desplaza trabajo. Un
+`avisos: "agrupados"` que lo diga una sola vez arreglaría esto.
+
+### A — No se puede cambiar el padre de una página existente
+
+**Qué quería:** mover la página 112 (`Mantenimiento de jardines residenciales`) bajo
+`/servicios/`, para que su URL fuera `/servicios/mantenimiento-de-jardines/`.
+
+**Llamada:** `content_update(post_id:112, title:..., slug:"mantenimiento-de-jardines")`
+
+**Respuesta:** correcta, pero la URL quedó en `/mantenimiento-de-jardines/`. **`content_update`
+no acepta `parent`.** Sus campos son `content`, `excerpt`, `meta`, `post_id`, `slug`, `status`,
+`title`. `content_create` **sí** acepta `parent`.
+
+**Qué hice:** probé `wp_cli("post update 112 --post_parent=105")`:
+```
+[not_supported] El comando "post update" no está en la allowlist de este servidor.
+Sí están disponibles: wp post meta get, wp post meta list.
+```
+Y acabé en PHP: `wp_update_post(['ID'=>112,'post_parent'=>105])`.
+
+**Coste:** 1 llamada fallida + 1 de PHP.
+
+**Mi lectura:** **asimetría sin motivo.** Si `content_create` sabe poner un padre,
+`content_update` debería saber cambiarlo: es el mismo campo de la misma tabla. Y no es un caso
+raro — reorganizar la jerarquía de un sitio es de las cosas más normales que se hacen al
+maquetar. Nota sobre la allowlist de `wp_cli`: deja instalar plugins y cambiar el tema activo
+—las dos operaciones más peligrosas del día— pero no deja cambiar el padre de una página.
+El criterio de qué está dentro y qué fuera no sigue el riesgo.
+
+### C/F — `option_update` dice que la identidad del sitio está bloqueada, y no lo está
+
+**Descripción de la herramienta:**
+> "Las opciones de identidad del sitio y las claves criptográficas están bloqueadas sin
+> excepción; las opciones grandes de constructores piden aprobación."
+
+**Llamada:** `option_update(name:"blogname", value:"Jardines del Valle")`
+
+**Respuesta:**
+```
+{"name":"blogname","action":"actualizada","stored":"Jardines del Valle",
+ "deshacer":{"revision":44,...}}
+```
+
+Lo mismo con `blogdescription`. `blogname` **es** la identidad del sitio: es el nombre que sale
+en el `<title>`, en la cabecera y en los correos que manda WordPress.
+
+**Qué hice:** nada, lo necesitaba y funcionó.
+
+**Coste:** 0.
+
+**Mi lectura:** **no es un fallo de comportamiento — el comportamiento es el que quiero — es un
+fallo de la descripción, y de los que salen caros.** Una descripción que anuncia un bloqueo
+inexistente hace que ni lo intentes: yo estuve a punto de irme a `wp_cli` directamente. Es el
+espejo del problema de `elementor_template_conditions`: allí la herramienta prometía hacer algo
+y no lo hacía; aquí promete no dejarte hacer algo y sí te deja. En ambos casos **la
+descripción no corresponde al código**, y en un servidor MCP la descripción *es* la
+documentación: no hay otra. Si "identidad del sitio" se refiere a `siteurl` y `home` —que sí
+tiene todo el sentido bloquear, porque tumban el sitio— la frase debería decir eso:
+"`siteurl` y `home` están bloqueadas".
+
+## Fase 6 — Contenido: reescribir la portada
+
+### ✅ `content_render` con `buscar`
+
+Para comprobar que un cambio llegó al front:
+```
+content_render(post_id:103, alcance:"pagina", buscar:"Su jardín bien cuidado")
+-> {"bytes":276558,"aparece":true,"contexto":"...<h1 class=\"elementor-heading-title...\">Su
+    jardín bien cuidado, todo el año y en cualquier parte de Honduras</h1>..."}
+```
+Devuelve 250 caracteres de contexto en vez de 276 KB de HTML, y con el marcado alrededor, que
+es justo lo que hace falta para saber si salió como `<h1>` o como texto suelto. Esta herramienta
+es la que me habría ahorrado media fase 3: es exactamente "compruébame que se ve de verdad".
+Su descripción lo dice con todas las letras —*"Es la forma de comprobar que un cambio se ve de
+verdad y no sólo que se guardó"*— y es cierto.
+
+### 🔴 E — El coste de contexto de `elementor_element_update`, con números
+
+Reescribí los **24 titulares** de la portada. Lo que mandé y lo que me devolvieron:
+
+| | Enviado | Devuelto |
+|---|---|---|
+| 21 `heading` | ~40 caracteres cada uno (`{"title": "..."}`) | ~450 palabras cada uno |
+| 3 `elementskit-heading` | 3 campos | **~1.200 palabras cada uno** |
+
+El widget `elementskit-heading` devolvió, por cambiar tres textos, las 40 claves de
+`..._secondary_bg_slideshow_gallery`, `..._border_color_right_video_fallback` y compañía, todas
+vacías. **La respuesta pesa unas 30 veces lo que la petición.**
+
+Y esto escala mal de forma brutal. La portada tiene 411 elementos, de los cuales unos 95
+llevan texto: 24 titulares (hechos), 13 `text-editor`, 14 botones, 17 `icon-box`, 15
+`icon-list`, 5 contadores, más testimonios, acordeón y fichas. **Son ~95 escrituras para UNA
+página.** El sitio tiene 33. Del orden de **1.500 escrituras de elemento**, y en cada una el
+servidor me devuelve el widget entero.
+
+**Mi lectura:** no es un bug, es la decisión de diseño que más limita al servidor en trabajo
+real. Y tiene arreglo barato: `elementor_element_update` ya sabe qué claves tocó —lo sabe
+porque las fusionó—, así que devolver
+```json
+{"post_id":103,"element_id":"ffcc7f9","cambiado":["ekit_heading_title","ekit_heading_sub_title"],
+ "deshacer":{"revision":120}}
+```
+sería suficiente en el 95% de los casos. Un parámetro `devolver:"minimo"|"completo"` lo
+resolvería sin romper a nadie. Comparado con esto, que falte `plugin_install` es una molestia;
+esto es lo que decide si el servidor sirve para maquetar un sitio entero o sólo para retoques.
+
+### B — El campo `texto` de `elementor_find` miente en `text-editor`
+
+**Llamada:** `elementor_find(post_id:103, widget:"text-editor")`
+
+**Respuesta (extracto literal):**
+```json
+{"id":"fa633e1","widget":"text-editor","ruta":"1.1.0.2","texto":"px"}
+{"id":"f98351b","widget":"text-editor","ruta":"2.0.1.0","texto":"end"}
+{"id":"3c54c2c","widget":"text-editor","ruta":"7.0.1.0.1","texto":"px"}
+{"id":"b94e29e","widget":"text-editor","ruta":"11.0.1.0","texto":"end"}
+```
+De 13 `text-editor`, **5 devolvieron `"px"` o `"end"`**: son valores de una unidad CSS y de una
+alineación, no el contenido del widget. Los otros 8 sí traían texto real.
+
+**Qué hice:** todavía nada; los 5 hay que abrirlos uno a uno para saber qué dicen.
+
+**Coste:** 5 llamadas extra que la herramienta existía para evitar.
+
+**Mi lectura:** **fallo, y de los sutiles.** Parece que `texto` coge *la primera clave string
+que encuentra* en los ajustes en lugar de la clave de contenido del widget (`editor` en
+`text-editor`). Cuando acierta es utilísimo —fue lo que me destapó el `mf_form_id` del sitio
+demo en los formularios— y cuando falla no te avisa: te devuelve `"px"` con toda la
+naturalidad, y si te fías, te saltas un widget con texto en inglés dentro. El arreglo es
+mapear la clave de contenido por tipo de widget (`title` en heading, `editor` en text-editor,
+`text` en button) en vez de adivinar.
