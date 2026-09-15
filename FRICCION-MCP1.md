@@ -1940,3 +1940,105 @@ contenido, y **un humano mira la pantalla y me dice qué está torcido.** Funcio
 menú se arregló en veinte minutos desde su captura— pero conviene decirlo tal cual, porque
 es lo que de verdad hace falta para trabajar así, y no sale en ninguna descripción de
 herramienta.
+
+---
+
+# Fase 17 — Verificación móvil: no se había hecho, y había dos fallos míos
+
+Pregunta directa del cliente: *¿se hizo verificación de la versión móvil de este sitio?*
+
+**No.** Ni una sola vez en 16 fases. Hasta ahora toda la verificación ha sido el HTML
+publicado —código 200, palabras, inglés, enlaces vacíos, elementos de Elementor— y eso no
+tiene tamaño de pantalla. Lo digo sin rodeos porque es exactamente el tipo de hueco que este
+registro existe para medir, y llevaba 16 fases sin salir.
+
+## Los dos fallos que encontré al mirarlo, y son míos
+
+Los tres ajustes que metí en la fase 14 para arreglar el escritorio se aplicaban en **todos**
+los tamaños. Al auditarlos en el CSS generado:
+
+```
+sin media query, o sea en móvil también:
+  .elementor-element-a1b2c3d { --n-menu-heading-wrap: nowrap; }   <- del custom_css
+  .elementor-element-05746ba { --flex-wrap: nowrap; }             <- el panel
+```
+
+**1. `--n-menu-heading-wrap: nowrap` en móvil.** El widget usa esa misma variable para las dos
+cosas: en escritorio decide si la barra se parte en dos líneas, y en móvil, dentro del
+desplegable de la hamburguesa, es lo que **apila las ocho entradas en vertical**. Al forzarla
+a `nowrap` para arreglar el escritorio, dejé las ocho entradas comprimidas en una sola fila
+dentro del desplegable móvil. Menú inservible en teléfono.
+
+**2. `--flex-wrap: nowrap` en el panel de Servicios.** Las cuatro columnas del mega menú, que
+en escritorio tienen que ir en fila, quedaban también en fila en móvil: cuatro columnas
+aplastadas en 360 px.
+
+**Qué hice:**
+```php
+// el nowrap, sólo escritorio
+'custom_css' => '@media(min-width:1025px){selector{--n-menu-heading-wrap:nowrap;}}'
+// el panel vuelve a envolver por debajo de escritorio
+'flex_wrap' => 'nowrap', 'flex_wrap_tablet' => 'wrap', 'flex_wrap_mobile' => 'wrap'
+// y las columnas: 22/24/20/30% escritorio, 50% tableta, 100% móvil
+```
+Comprobado en el CSS generado: el `nowrap` del menú vive ahora dentro de
+`@media(min-width:1025px)`, el panel tiene `--flex-wrap:wrap` en `max-width:1024px` y en
+`max-width:767px`, y las columnas `--width:100%` por debajo de 768.
+
+**Coste:** 3 llamadas, y el fallo estuvo publicado desde la fase 14.
+
+**Mi lectura:** error mío de cabo a rabo, y con una lección concreta: **el CSS propio de un
+elemento (`custom_css`) no tiene variantes por dispositivo.** Los controles normales de
+Elementor las traen —`flex_wrap_tablet`, `width_mobile`— pero lo que escribes a mano se
+aplica en todas partes salvo que tú mismo pongas la media query. Cuando la salida a un ajuste
+que no existe es escribir CSS a pelo (fase 14), te llevas también la responsabilidad de los
+puntos de ruptura, y eso no lo advierte nada.
+
+## Lo que una auditoría de datos sí ve, y lo que no
+
+Recorrí los 38 documentos buscando problemas de móvil en los ajustes y en el CSS generado.
+
+**Lo que salió, y era ruido:** doce contenedores con anchura fija grande —650 px, 700 px,
+565 px, 520 px— sin variante móvil. Parecía desbordamiento seguro. No lo es: Elementor aplica
+
+```css
+.e-con{ max-width: min(100%, var(--width)) }
+```
+
+así que una anchura de 650 px en una pantalla de 360 se convierte en 360. Doce falsos
+positivos. **Una captura de pantalla no me habría hecho perder ese tiempo.**
+
+**Lo que salió y sí importa:** el botón «Cotizar gratis» de la cabecera está oculto en móvil
+(`hide_mobile`, decisión del kit original, no mía). En teléfono la cabecera es logo +
+hamburguesa y no hay ninguna llamada a la acción visible. Para un sitio cuyo argumento entero
+es «mándenos fotos por WhatsApp», eso merece mirarse. No lo he cambiado porque no es un fallo,
+es una decisión de diseño del kit y tocarla puede apretar la cabecera; lo dejo dicho.
+
+**Y lo que no puedo ver de ninguna manera:** si el sitio **se ve bien** en un teléfono. He
+auditado los ajustes y el CSS generado, que es una capa por debajo. Sé que las reglas dicen
+lo correcto. No sé si el resultado se lee, si los textos caben, si algo se monta encima de
+otra cosa, si los botones se pueden pulsar con el pulgar. **Para eso hace falta abrir la
+página en un móvil, y eso es exactamente lo que la fase 16 dice que no puedo hacer.**
+
+## Por qué esto sube la fase 16 de categoría
+
+En la fase 16 dije que no ver el renderizado era la limitación más importante del proyecto.
+Con esto se queda corto, y lo corrijo: **no es sólo que no pueda ver una página, es que no
+puedo navegar el sitio ni cambiar de tamaño de pantalla.** Son dos cosas distintas y la
+segunda es peor.
+
+Una herramienta de captura del lado del servidor tendría que aceptar el ancho como parámetro:
+
+> **`page_screenshot(post_id, ancho, alto?)`** — con `ancho=390` se ve el móvil, con
+> `ancho=768` la tableta, con `ancho=1440` el escritorio. **Tres llamadas y unas decenas de
+> KB por página**, contra la alternativa actual, que es que una persona abra el sitio en tres
+> dispositivos.
+
+Los dos fallos de esta fase habrían salido en la primera captura a 390 px. Los doce falsos
+positivos no habrían existido. Y el botón oculto en móvil se habría visto de un vistazo en
+lugar de salir de un `grep` por `hide_mobile`.
+
+Corrijo también lo que escribí al final de la fase 14: dije que la única verificación visual
+del proyecto había sido un humano mirando la pantalla. Es peor que eso: **ha sido un humano
+mirando la pantalla de un escritorio.** La versión móvil de este sitio no la ha visto nadie
+todavía, ni él ni yo.
