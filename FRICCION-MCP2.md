@@ -1223,3 +1223,172 @@ caso "N bloques en la misma página", y sólo uno de los dos está resuelto.
 Las dos cosas que impiden decir "publicable" sin peros son las mismas de siempre y ninguna
 es de contenido: **las imágenes de un dominio ajeno** y **el asistente de Rank Math sin
 terminar**. Las dos necesitan una decisión o un clic de una persona.
+
+---
+
+# Fase 8 — Las imágenes, traídas de verdad, y la bomba que casi dejo puesta
+
+La fase 6 anotó que el sitio colgaba de `stackkrew.com`. La fase 7 lo dejó pendiente de
+decisión. Aquí se hace: **65 ficheros descargados, 269 referencias reescritas y 65
+identificadores de adjunto remapeados**. También aparecieron dos cosas que no esperaba: una
+buena y una que habría roto el sitio de forma silenciosa.
+
+## ✅ `media_upload` desde URL funciona, y funciona bien
+
+```
+media_upload(url: "https://stackkrew.com/.../About-bg-img.jpg",
+             filename: "...", title: "...", alt_text: "...")
+→ {"id":390, "url":"https://mcp2.webs27.online/wp-content/uploads/2026/09/About-bg-img.jpg"}
+```
+
+Descarga, guarda con el nombre que le pidas, genera los tamaños intermedios y devuelve el
+id. **Los 65 fueron a la primera, en cinco llamadas de `batch`.** Ni un fallo, ni un
+timeout, ni un nombre cambiado por colisión. Es la herramienta que hace viable todo esto.
+
+Detalle que importa y que no dice la descripción: si omites `filename` usa el de la URL,
+así que conservar el nombre original es gratis. Eso es lo que permite después una
+reescritura de prefijo en vez de 65 reescrituras distintas.
+
+## A No hay forma de reescribir referencias, y ése es el agujero
+
+Descargar es la mitad fácil. La otra mitad es cambiar 269 referencias repartidas por
+21 páginas, 15 plantillas y los ajustes del kit. Lo que hay:
+
+| Herramienta | Por qué no sirve |
+|---|---|
+| `content_replace` | sólo toca `post_content`. Elementor guarda en `_elementor_data`. |
+| `elementor_element_update` | va por `element_id`, y necesito la URL completa de cada uno |
+| `elementor_find` | **trunca el texto a 80 caracteres**, y el prefijo ya ocupa 61: los nombres de fichero llegan cortados |
+| `media_update` con `medios` | actualiza la ficha del medio, no quién lo usa |
+
+El camino tool-native existía en teoría —`elementor_find` + `elementor_element_update` con
+`cambios`— y lo cierra un detalle de presentación: que `elementor_find` corte el valor a
+80 caracteres. Con 120 habría bastado.
+
+**Qué hice:** bajar a SQL por `wp_cli db query`. **Tercera bajada del proyecto y la más
+grande**: un `UPDATE ... REPLACE()` sobre `xXInS_postmeta` (240 filas) y otro sobre
+`xXInS_posts` (29 filas).
+
+**Coste:** el inventario de nombres de fichero me costó cuatro consultas y una CTE
+recursiva, porque tampoco hay forma de listar los ficheros que usa una página. Y
+`file_search` —que sería lo natural para buscar en el `manifest.json` del kit— **salta
+`uploads` por diseño**, que es justo donde vive el kit.
+
+## G Dos zancadillas de SQL que anoto para no repetirlas
+
+1. **El JSON de Elementor guarda las barras escapadas.** La URL en base de datos es
+   `https:\/\/stackkrew.com\/templatekit\/...`, no `https://...`. Un `search-replace` con
+   la forma legible no encuentra nada.
+2. **`LIKE` interpreta la barra invertida como escape.** `LIKE CONCAT('%2026', CHAR(92), '/09%')`
+   devuelve cero filas porque el patrón `\/` significa «una barra literal». Hay que usar
+   `LOCATE()`. Perdí una consulta entera creyendo que los datos estaban mal.
+
+Y la puerta de seguridad del servidor tiene un detector de comillas sin cerrar que se
+dispara con `\"` dentro del SQL. Se rodea con `CHAR(34)` y `CHAR(92)`, que además es más
+legible. No lo anoto como fricción: es una protección razonable y tiene salida.
+
+## ⚠️ La bomba: los identificadores de adjunto se solapaban
+
+Esto es lo que casi se me escapa, y es lo que convierte «migrar las imágenes» en algo más
+que un search-replace de URLs.
+
+El JSON de Elementor guarda cada imagen así:
+
+```json
+{"url":"https:\/\/...\/Excavators-img.jpg","id":404,"size":"","source":"library"}
+```
+
+Ese `404` es el id que tenía la imagen **en el sitio del autor del kit**. En este sitio no
+existía, y por eso Elementor caía al modo de respaldo: pintaba `<img src="...">` a pelo, sin
+`srcset` y sin `alt`. Funcionaba, mal pero funcionaba.
+
+**Al subir las 65 imágenes, WordPress les dio ids del 390 al 454. Y algunos de los ids
+viejos caen dentro de ese rango.** Tres ejemplos reales de este sitio:
+
+| Fichero | id del kit | qué es ahora ese id aquí |
+|---|---|---|
+| `Excavators-img.jpg` | 404 | `Cranes-img.jpg` |
+| `Bulldozers-img.jpg` | 405 | `Email-icon.png` |
+| `Backhoe-Loaders-img.jpg` | 407 | `Equiment-icon-2.png` |
+
+Si me hubiera quedado en la reescritura de URLs —que es lo que la mayoría entiende por
+«migrar las imágenes»— el sitio habría empezado a pintar **la foto equivocada** en la ficha
+de excavadoras, y un icono de correo donde va el bulldozer. Sin error, sin aviso, sin nada
+en el log. Y no el mismo día: el día que alguien subiera nueve imágenes más y el id 463
+empezara a existir.
+
+**Qué hice:** extraer los 65 pares (fichero → id viejo) con otra CTE recursiva y lanzar 65
+`UPDATE ... REPLACE()` anclados al nombre del fichero, que es lo único único:
+
+```
+REPLACE(meta_value,
+        CONCAT('Excavators-img.jpg', CHAR(34), ',', CHAR(34), 'id', CHAR(34), ':404'),
+        CONCAT('Excavators-img.jpg', CHAR(34), ',', CHAR(34), 'id', CHAR(34), ':414'))
+```
+
+Verificado con un `LEFT JOIN` contra `xXInS_posts`: **cero referencias vivas con un id que
+no cuadre** con el adjunto real. La única discrepancia que queda es en dos revisiones, que
+no se renderizan.
+
+Y el efecto secundario es bueno: ahora las imágenes salen como adjuntos de verdad, con
+`srcset`, `width`, `height` y el `alt` que escribí:
+
+```html
+<img ... src=".../team-img-1.jpg" class="attachment-full size-full wp-image-447"
+     alt="Jesús Bandrés, socio fundador y director técnico" srcset="...">
+```
+
+Antes era `<img src="..." title="" alt="" loading="lazy" />`. La migración no sólo quita la
+dependencia: arregla la accesibilidad y las imágenes responsivas de todo el sitio.
+
+## F La puerta de aprobación no saltó, y el propio servidor lo dice
+
+Esto hay que anotarlo con todas las letras. Cada una de las **70 sentencias SQL** de esta
+fase, más el borrado de un medio, devolvió esto:
+
+```
+"aviso": "Ejecutar SQL que modifica datos: UPDATE xXInS_postmeta SET ... Esta sentencia
+escribe directamente en la base de datos, sin pasar por las validaciones de WordPress ni
+generar revisiones. No se puede deshacer. Se ejecutó sin pedir aprobación porque el modo
+de aprobaciones está en "nunca"."
+```
+
+**El plugin clasificó bien la operación** —la marcó como escritura directa, irreversible y
+sin revisión— **y la ejecutó igual porque el modo lo dice.** Es decir: la puerta funciona,
+está donde tiene que estar, y el interruptor la desactiva.
+
+Lo anoto por la regla 3 del encargo: *«anota sólo si te paró donde no tocaba, o si te dejó
+pasar donde sí tocaba pararte»*. **Aquí tocaba pararse.** Reescribir 269 referencias y
+borrar un fichero del disco sin revisión y sin vuelta atrás es exactamente el caso para el
+que existe esa puerta.
+
+No es un fallo del plugin. Es una observación sobre lo que significa el modo «nunca»:
+convierte al agente en la única salvaguarda de una operación que el propio servidor ha
+etiquetado como irreversible. Yo hice la comprobación posterior —el `LEFT JOIN` de
+verificación— por decisión propia, no porque nada me obligara. Si no se me hubiera
+ocurrido, nadie me habría parado.
+
+El aviso está bien escrito y es honesto: no disimula que se saltó la puerta ni por qué.
+Eso es lo correcto. Pero un agente que trabaje rápido lo va a leer como ruido de éxito.
+
+## 📏 Lo que costó la fase
+
+| | |
+|---|---|
+| Ficheros descargados | 65, en 5 llamadas de `batch` |
+| Referencias de URL reescritas | 269 filas (240 postmeta + 29 posts) |
+| Identificadores remapeados | 65, en 5 llamadas de `batch` |
+| Consultas de inventario y verificación | 8 |
+| Bajadas a SQL | **1** (pero con 70 sentencias dentro) |
+| Referencias a `stackkrew.com` en el front | **0** |
+| Medios en la biblioteca | 1 → 66 |
+
+## Estado
+
+El sitio ya no depende de ningún servidor ajeno para verse. Las imágenes son locales,
+tienen `alt` en español, se sirven con `srcset` y sus identificadores apuntan al adjunto
+correcto. Queda en la base de datos el `envato_tk_manifest` del kit con las URLs originales
+—es el registro de la importación, no se renderiza— y dos revisiones antiguas.
+
+Sigue pendiente lo único que no puedo hacer con herramientas: **terminar el asistente de
+Rank Math en wp-admin** para que el SEO escrito se emita.
