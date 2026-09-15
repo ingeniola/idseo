@@ -1649,3 +1649,260 @@ dirección, el teléfono y el horario reales. Logotipo nuevo en los tres sitios.
 inglés**, ahora sí, incluida la plantilla de título del 404.
 
 Queda una sola cosa, y es tuya: el sitio **no tiene favicon** (`site_icon` está a `0`).
+
+---
+
+# Fase 11 — 196 ajustes, y la primera vez que una herramienta me mintió dos veces seguidas
+
+Ronda con el plugin en 1.10.3. Dos avisos antes de nada: al conectar, `site_info` decía
+**1.10.2**, no 1.10.3; lo dije y seguí, y a mitad de la tarea subiste la versión buena. Y
+sigo sin el código fuente del plugin.
+
+## ✅ `elementor_text_audit` funciona
+
+Once fases pidiéndola. Una llamada, las 21 páginas:
+
+```
+elementor_text_audit(post_ids: [189…209], buscar: "Title #")
+→ {"total": 196, "buscando": "Title #"}
+```
+
+**196 en 28 widgets**, exactamente lo anunciado. Es la herramienta que me faltó en la fase 7
+(donde el pie entero se quedó en inglés) y en la fase 9 (los dieciséis botones). Con ella,
+encontrar esto cuesta una llamada; sin ella me costó dos fases y dos errores.
+
+Un pero de tamaño: la respuesta son **~9.000 tokens** para 196 hallazgos, porque cada
+entrada repite entera `element_id`, `widget`, `clave` y `ruta`. Cuando los 196 están en 28
+widgets y siete claves correlativas, eso es mucho papel para poca información. Un modo
+agrupado —«este widget, estas siete claves»— bajaría diez veces el coste sin perder nada.
+
+## B La escritura por ruta con puntos dice que sí y no hace nada
+
+El audit devuelve la clave así: `ekit_client_logo_repiter.0.ekit_client_logo_list_title`.
+Es una ruta con puntos, y lo natural es escribir por donde se lee. Lo probé:
+
+```
+elementor_element_update(post_id: 189, element_id: "4c990de", ajustes: {
+  "ekit_client_logo_repiter.0.ekit_client_logo_list_title": "Construcciones Bardenas", …7 })
+
+→ {"aplicados": 1, "elementos": [{"element_id":"4c990de","claves":[…las siete…]}],
+   "deshacer": {"revision": 369}}
+```
+
+Éxito, las siete claves enumeradas, y una revisión creada. **No escribió nada.** Lo que hizo
+fue guardar siete **claves basura de primer nivel** en los ajustes del widget:
+
+```json
+"_mask_image":{…},
+"ekit_client_logo_repiter.0.ekit_client_logo_list_title":"Construcciones Bardenas",
+"ekit_client_logo_repiter.1.ekit_client_logo_list_title":"Excavaciones Ferrer e Hijos", …
+```
+
+mientras el repetidor de verdad seguía intacto unos cinco mil caracteres más arriba:
+
+```json
+"ekit_client_logo_repiter":[{"ekit_client_logo_list_title":"Title #1","_id":"4e9ead6",…
+```
+
+Elementor ignora las claves que no conoce, así que en el front no cambió nada. **Lo grave no
+es que no funcione: es que responde `aplicados: 1` y crea una revisión.** Un agente que no
+verifique da los 196 por hechos y se va.
+
+Y hay un agravante de diseño: **el propio servidor tiene `elementor_widget_schema`**, cuya
+descripción dice literalmente *«Elementor ignora en silencio las claves que no conoce, así
+que un ajuste mal nombrado se guarda y no hace nada»*. El servidor sabe que ese peligro
+existe, tiene el esquema del widget a mano para validarlo, y aun así acepta la clave
+inventada y la reporta como aplicada.
+
+### El agravante de 1.10.3: las dos herramientas se ponen de acuerdo en la mentira
+
+Cuando subiste 1.10.3 repetí la prueba, porque era lo que más ilusión me hacía que
+estuviera arreglado. Y pareció que sí:
+
+```
+elementor_element_update(… "ekit_client_logo_repiter.0.…": "Construcciones Bardenas")
+elementor_text_audit(post_ids:[189], buscar:"Bardenas")
+→ {"element_id":"4c990de", "clave":"ekit_client_logo_repiter.0.ekit_client_logo_list_title",
+   "texto":"Construcciones Bardenas"}
+```
+
+El audit lo confirmaba. **Y era falso.** En 1.10.3 el audit recorre también las claves
+literales con puntos y las presenta como si fueran la ruta del repetidor, así que lee la
+basura que escribió el otro y da el cambio por bueno. Antes de 1.10.3 el audit leía
+«Title #1» ahí y me habría avisado; después, coincide con el escritor.
+
+La verdad estaba donde siempre:
+
+```
+content_render(189, alcance:"pagina", buscar: "title=\"Title #1\"")
+→ aparece: true
+```
+
+**Dos herramientas del mismo servidor confirmándose entre sí sobre algo que el visitante ve
+distinto.** Es el caso peor: la verificación cruzada, que es lo que me ha salvado en las
+fases 9 y 10, aquí no habría servido. Sólo sirvió abrir la página.
+
+Lo escribo con todas las letras porque en la fase 10 me señalé a mí mismo por fiarme de un
+aviso del servidor sin abrir el front. Esta vez lo abrí. Es la única razón por la que esto
+no acabó como «196 ajustes hechos».
+
+## Lo que sí funciona, y lo que cuesta
+
+La vía soportada es sustituir el repetidor entero, reenviando en cada fila el `_id` y la
+imagen que no estoy cambiando:
+
+```json
+"ekit_client_logo_repiter": [
+  {"ekit_client_logo_list_title":"Construcciones Bardenas","_id":"4e9ead6",
+   "ekit_client_logo_image_normal":{"url":"…/logo-11.png","id":429,"size":"","alt":"","source":"library"}},
+  …seis más… ]
+```
+
+Para cambiar **ocho caracteres** hay que reenviar **195**.
+
+Y de paso: `null` sobre la clave literal con puntos **sí** la borra, así que la basura de la
+primera prueba se limpió en la misma llamada que escribía el array bueno. Verificado:
+`LOCATE('ekit_client_logo_repiter.0.ekit', meta_value) → 0`.
+
+## 📏 La medición
+
+| | |
+|---|---|
+| Encontrar los 196 | **1 llamada** · ida ~130 tok · **vuelta ~9.000 tok** |
+| Escribirlos (vía soportada) | **6 llamadas** · 28 widgets · 196 ajustes |
+| Ida de las seis | ~11.500 tokens (míos, escribiendo JSON) |
+| Vuelta de las seis | ~700 tokens en total |
+| Verificar | 1 llamada de audit (~800 tok) + 2 de render |
+| **Por ajuste, sólo escritura** | **~62 tokens** |
+| Método fallido (diagnóstico incluido) | 2 escrituras + 5 consultas ≈ 4.000 tokens tirados |
+| Bajadas a PHP en la tarea 1 | **ninguna** |
+
+**Cuántos ajustes en una llamada, y dónde molesta.** Subí a propósito hasta romper y no
+rompí: 14 ajustes (1 página), 28 (2 páginas, 5,9 KB), 42 (3 páginas, 8,8 KB) y **56
+(4 páginas, 8 widgets, 11,8 KB)**, todas correctas a la primera. El transporte aguanta más
+de lo que yo aguanto.
+
+Porque el punto incómodo **no es la herramienta, soy yo**. A ocho widgets por llamada estoy
+escribiendo a mano 3.200 tokens de JSON en los que 56 URLs de imagen tienen que ir
+perfectas; una sola mal copiada cambia un logotipo en silencio y ninguna herramienta me
+avisa. El límite práctico es **lo que puedo releer antes de enviar**, y está en cuatro o
+seis widgets, no en el tamaño del mensaje.
+
+## ¿Habría bajado a PHP con estos números?
+
+**No. Pero esta vez ha estado cerca, y conviene decir por qué.**
+
+En la fase 5 me corregí y dije que `batch` + `cambios` cerraban el hueco. Con texto plano
+—`title`, `editor`— sigue siendo verdad y por goleada: **18 tokens por elemento**. Aquí son
+**62**, tres veces y media más, y la diferencia no es casual: un repetidor **no se puede
+tocar por partes**. El coste no lo marca lo que cambias, lo marca lo que hay alrededor de
+lo que cambias.
+
+El aplicador en PHP habrían sido unas veinticinco líneas: recorrer `_elementor_data`, buscar
+los widgets `elementskit-client-logo`, mapear índice de fila a nombre, guardar. Una llamada,
+las 28 de golpe, sin que yo teclee once mil tokens y sin riesgo de equivocarme con una URL.
+Frente a eso, la vía soportada da **seis puntos de deshacer** y no me obliga a escribir
+código que no puedo probar por partes. Gana la herramienta, pero por menos margen que antes.
+
+**Dónde se rompe, concretamente:** en cuanto la fila del repetidor es grande. Aquí la fila
+son 195 caracteres. El repetidor de testimonios de este mismo sitio tiene nombre, cargo,
+cita y foto: unas 600. Cambiar sólo los seis cargos costaría **más de 300 tokens por
+ajuste** y ahí PHP gana sin discusión. El problema **no está arreglado: está acotado.**
+Funciona para ajustes sueltos y sigue abierto para repetidores.
+
+Y lo que falta para cerrarlo está a la vista: **que se pueda escribir por la misma ruta con
+la que se lee**. `elementor_text_audit` ya habla ese idioma. Si
+`ekit_client_logo_repiter.0.ekit_client_logo_list_title` fuese escribible de verdad, los 196
+ajustes habrían sido una llamada de 196 líneas cortas —unos 3.000 tokens, **15 por
+ajuste**— y esta entrada no existiría. La distancia entre lo que hay y lo que hace falta es
+que el escritor entienda lo que el lector ya escribe.
+
+## Decisiones de contenido (las digo, como pedías)
+
+Los globos **llevan nombre**, no los he dejado vacíos. Un carrusel de logotipos de cliente
+cuyo `title` dice quién es el cliente es información; vacío es un hueco. Siete nombres,
+coherentes con los testimonios ya inventados, y **cada logotipo lleva siempre el mismo
+nombre en las catorce páginas** (los dos widgets de cada página traen los logotipos en orden
+distinto, así que el orden de los nombres cambia con ellos):
+
+Construcciones Bardenas · Excavaciones Ferrer e Hijos · Parque Eólico La Muela ·
+Viales del Ebro · Urbanizaciones Cinca · Áridos del Gállego · Ayuntamiento de La Almunia
+
+Los dos últimos son nuevos y van al bloque de datos ficticios del encargo.
+
+## Tarea 2
+
+**Panel del menú móvil.** Estaba en `elementskit_mobile_menu_panel_width_mobile` = 360 px.
+Puesto al 100 % en base, tablet y móvil.
+
+> **C/B `elementor_widget_schema` no lista las variantes por dispositivo de ElementsKit.**
+> Pedí el esquema con `incluir_responsive: true` y sólo salió
+> `elementskit_mobile_menu_panel_width`. La clave que el sitio tiene guardada de verdad es
+> `..._width_mobile`. La encontré consultando la base de datos, no el esquema. En una
+> herramienta cuyo propósito declarado es «evitar inventarse nombres de ajuste», que falte
+> justo la variante que hay escrita es un agujero fino pero exacto.
+
+**El separador colgando.** El control `divider` del listado de iconos **no es responsive**:
+no hay `divider_mobile`. No se puede apagar sólo en móvil con un ajuste. Lo que sí hay es
+`custom_css` por widget (Elementor Pro), así que:
+
+```css
+@media (max-width: 1024px) {
+  selector .elementor-icon-list-item:not(:last-child):after { display: none !important; }
+}
+```
+
+Lo anoto como **A**: la herramienta existe para el caso general, pero el caso «apaga esto
+sólo en móvil» no se puede resolver con ajustes cuando el control no es responsive, y hay
+que escribir CSS.
+
+**El icono de «Área de cliente».** Era `icon icon-user-login` de ekiticons y te dio la
+razón: es un círculo con una figura dentro que se lee antes como símbolo de accesibilidad
+que como usuario. Cambiado a **`far fa-user`** de Font Awesome, la versión de línea, que
+pega con el reloj del otro elemento. Elementor lo pinta como SVG en línea, así que en el
+HTML no se ve la clase; se comprueba por el `path`.
+
+## D El favicon obliga a bajar a PHP
+
+`site_icon` estaba a 0 y hacía falta un cuadrado de 512×512 con la «A». **Esto no se puede
+con las herramientas que hay**: `media_upload` descarga de una URL pero no recorta, y no hay
+nada que redimensione, recorte o componga una imagen. Lo comprobé además en el catálogo de
+la Abilities API (`abilities_list`, 65 capacidades): tampoco.
+
+Tres llamadas de PHP, y las dos primeras fueron por no ver:
+
+1. Buscar la marca por un hueco de 60 px sin píxeles → **falló**: en este logotipo no hay
+   hueco de 60 px entre el icono y «ALTORRE». Devolvió la caja del conjunto entero.
+2. Buscar los huecos reales → sólo cuatro de 12 px o más, y **todos dentro del texto**.
+3. Aislar **por color**, perfilando fila a fila qué columnas son ámbar. Ahí sí salió limpio:
+   el icono va de **x 84 a 578** y de **y 129 a 593**, y el ámbar que llega a x 951 es
+   «MAQUINARIA», que está más abajo.
+
+Con la caja medida, GD: lienzo de 512×512 en `#1F2328`, la marca reescalada a 390×366 y
+centrada con 12 % de aire. Adjunto **503**, `site_icon` = 503, y WordPress generó los
+tamaños de 32, 180, 192 y 270. Verificado en la cabecera del HTML:
+
+```html
+<link rel="icon" href="…/altorre-icono-sitio-32x32.png" sizes="32x32" />
+```
+
+**Mi lectura:** no pido un editor de imágenes en un servidor MCP de WordPress. Pero «poner
+el favicon» es una tarea de cierre de cualquier sitio, y hoy exige o bien que una persona
+prepare el fichero fuera, o bien PHP. Una `media_crop` —o un `site_icon_set` que recorte
+desde un adjunto existente— cerraría el caso con una llamada. Es, de toda la ronda, lo único
+que no tuvo ninguna salida con herramientas.
+
+**Lo que no puedo comprobar:** cómo ha quedado el recorte. Medí la caja, no la vi. Está en
+`/wp-content/uploads/2026/09/altorre-icono-sitio.png`.
+
+## Estado
+
+| | |
+|---|---|
+| «Title #» en el sitio | **0**, verificado con el audit y en el HTML |
+| Imágenes de los logotipos | intactas, con su `alt` |
+| Panel del menú móvil | 100 % por debajo de 1024 px |
+| Separador de la barra superior | oculto por debajo de 1024 px |
+| Icono de «Área de cliente» | `far fa-user` |
+| Favicon | puesto, generado desde el logotipo |
+| Bajadas a PHP | **1**, sólo para el favicon |

@@ -240,6 +240,7 @@ Todo lo de este bloque es inventado y está escrito en el sitio:
 | Teléfonos y correos | 976 500 180 · 640 22 18 90 · las dos direcciones de correo | todo el sitio |
 | Perfiles sociales | LinkedIn `company/altorre-maquinaria` · Facebook `altorremaquinaria` · YouTube `@altorremaquinaria` · WhatsApp `wa.me/34640221890` | cabecera y pie |
 | Testimonios y clientes | los seis nombres y sus empresas | cinco páginas |
+| Nombres de los logotipos de cliente | Construcciones Bardenas · Excavaciones Ferrer e Hijos · Parque Eólico La Muela · Viales del Ebro · Urbanizaciones Cinca · Áridos del Gállego · Ayuntamiento de La Almunia | el globo `title=` de los 28 carruseles |
 | Logotipos de cliente | los del kit, marcas inventadas | portada, Maquinaria, Tarifas, Reservar, Nosotros, fichas |
 | Tarifas | los ocho precios «desde» | Tarifas y las ocho fichas |
 | Cifras de la casa | 214 máquinas, 54 personas, 9 mecánicos, 6 góndolas, 1.900 obras | portada, Maquinaria, Nosotros, fichas |
