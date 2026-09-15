@@ -1666,3 +1666,122 @@ edita desde su propio constructor y se guarda en un CPT con meta no documentada:
 forma de construirlo ni de verificarlo desde aquí sin leer el código del plugin, que el
 encargo prohíbe. Si se prefiere el otro reparto, se revierte cambiando el widget de la
 cabecera; el menú de WordPress sigue intacto.
+
+---
+
+# Fase 14 — El mega menú salió mal a la primera: tres causas
+
+Capturas del cliente: el menú partido en dos líneas y el panel de Servicios a pantalla
+completa, altísimo, con las cuatro columnas apiladas una debajo de otra en vez de en fila.
+Tres causas independientes, y dos de ellas son el mismo patrón de siempre.
+
+## F Un `select` acepta cualquier cadena y la escribe cruda en el CSS
+
+El control `content_width` del widget `mega-menu` es un `select` con exactamente dos
+valores: `full_width` y `fit_to_content`. Yo escribí `'full'`, por analogía con el control
+del mismo nombre de los contenedores, donde `full` **sí** es válido.
+
+**Llamada:** `$w['content_width'] = 'full';` dentro del guardado del documento.
+
+**Respuesta:** ninguna. Se guardó, el documento validó, la página renderizó 200. Elementor
+generó esto:
+
+```css
+.elementor-99 .elementor-element-a1b2c3d{--n-menu-dropdown-content-max-width:full;}
+```
+
+`full` no es una longitud CSS. El navegador descarta la declaración, la variable se queda sin
+valor y el panel se estira a todo el ancho de la ventana. El selector del control es
+literalmente `--n-menu-dropdown-content-max-width: {{VALUE}}`, con el valor interpolado tal
+cual; los dos valores legítimos se traducen antes por diccionario (`full_width` → `initial`),
+y cualquier otra cosa pasa de largo.
+
+**Qué hice:** poner `full_width`. Comprobado en el CSS generado:
+`--n-menu-dropdown-content-max-width:initial`.
+
+**Coste:** 1 llamada de diagnóstico y 1 de corrección, más el rato de mirar las capturas.
+
+**Mi lectura:** fallo del plugin MCP, y esta vez uno que se puede arreglar sin tocar
+Elementor. El servidor **ya sabe** los valores válidos: `elementor_widget_schema` me los
+devolvió cuando se los pedí, con su diccionario de opciones. `elementor_element_update`
+tiene ese mismo esquema a mano y no lo usa para validar. Un ajuste de tipo `select` con un
+valor que no está entre sus opciones es siempre un error del que escribe, y es detectable
+en el momento. La propia descripción de `elementor_widget_schema` dice que existe porque
+«Elementor ignora en silencio las claves que no conoce». Es peor que eso: los **valores**
+que no conoce no los ignora, los publica.
+
+Lo anoto como F y no como B porque encaja con la tercera pregunta del encargo: aquí no me
+paró nada donde sí tocaba pararme.
+
+## B La anchura de un contenedor se ignora en silencio si no está en modo «ancho completo»
+
+Las cuatro columnas del panel llevaban `width: 22%`, `24%`, `20%` y `30%`. Salieron apiladas.
+
+**Diagnóstico:** el CSS generado de cada columna no tenía **ninguna** declaración `--width`:
+
+```css
+.elementor-element-9a33e9b{--display:flex;--flex-direction:column;--gap:10px 10px;...}
+```
+
+mientras que un contenedor hermano de la cabecera, que yo no había tocado, sí la tenía:
+
+```css
+.elementor-element-c0675af{--width:60%;}
+```
+
+La diferencia: el de la cabecera trae `content_width: "full"` y los míos no traían
+`content_width` en absoluto. En Elementor el control `width` de un contenedor depende de que
+`content_width` sea `full`; en modo `boxed`, que es el de por defecto, manda `boxed_width` y
+el `width` que escribas se guarda y no hace nada.
+
+**Qué hice:** poner `content_width: 'full'` en las cuatro columnas. `--width:22%` apareció
+al instante y las columnas se pusieron en fila.
+
+**Coste:** 2 llamadas.
+
+**Mi lectura:** el comportamiento es de Elementor y tiene su lógica, pero el resultado es
+exactamente el patrón que llevo anotando desde la fase 2, ahora a nivel de control: **se
+guarda un valor, no se emite nada, y nadie avisa.** Un ajuste con `condition` o `conditions`
+que no se cumplen es un ajuste muerto, y el servidor puede saberlo: el esquema del control
+trae esas condiciones. `elementor_element_update` podría contestar «he guardado `width`,
+pero no tendrá efecto porque `content_width` no es `full`» en lugar de un acuse de recibo
+limpio. Es la misma herramienta que ya valida etiquetas de correo en `cf7_update`.
+
+## A El ajuste que hacía falta no tiene control, y hubo que ir por CSS propio
+
+El menú se partía en dos líneas. La causa es `--n-menu-heading-wrap: wrap`, que el widget
+pone por defecto. Busqué el control en el esquema con `elementor_widget_schema` filtrando por
+`wrap`, `overflow` y `stretch`: **no existe**. La variable está, el control no.
+
+**Qué hice:** el control `custom_css` de Elementor Pro, en el propio widget:
+
+```css
+selector{--n-menu-heading-wrap:nowrap;}
+```
+
+Comprobado en el CSS generado: la regla sale al final del fichero, con la misma
+especificidad que la base, así que gana. Además bajé la separación entre entradas de 28 a
+14 px y repartí la cabecera 17 / 66 / 17 en lugar de 20 / 60 / 20.
+
+**Coste:** 3 llamadas contando la búsqueda en el esquema.
+
+**Mi lectura:** límite razonable de Elementor, no del servidor. Pero deja una lección para
+el catálogo: cuando el ajuste no existe, `custom_css` es la salida, y ninguna descripción de
+las herramientas de Elementor lo menciona. Un `elementor_element_update` que al recibir una
+clave desconocida contestara «ese ajuste no existe en este widget; si lo que quieres es una
+regla CSS, el control es `custom_css`» ahorraría la búsqueda.
+
+## Cómo quedó
+
+Panel blanco a todo el ancho con el contenido limitado a 1240 px y centrado (`e-con-boxed`
+con su `e-con-inner`), las cuatro columnas en fila con `flex-wrap: nowrap`, y el menú en una
+sola línea. Verificado en el HTML publicado: 8 entradas, 0 enlaces vacíos, las cuatro
+columnas con `e-con-full` y su `--width` emitido.
+
+**Lo que aprendí de esta fase, que vale para todo el proyecto:** verifiqué el mega menú
+contando enlaces y buscando texto, y pasó la verificación. Las tres cosas que estaban mal
+eran de **maquetación**, y ninguna se ve contando elementos ni leyendo texto. Sin la captura
+de pantalla del cliente, este menú se entrega roto. Es la contrapartida exacta de lo que
+anoté en la fase 12: allí el HTML era ciego a los ajustes, aquí los ajustes y el HTML son
+ciegos a cómo se ve. Con el proxy bloqueando las capturas desde este contenedor, la única
+verificación visual del proyecto ha sido un humano mirando la pantalla.
