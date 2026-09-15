@@ -931,3 +931,55 @@ es el fondo detrás de este elemento", así que fui al CSS generado por Elemento
 ```
 Negro. El logo blanco es el correcto. Tres llamadas para responder algo que un humano resuelve
 mirando la pantalla medio segundo.
+
+## Fase 8 — Contacto con Contact Form 7
+
+### ✅✅ `cf7_update` avisa de un fallo que no da error
+
+Cambié los campos del formulario de `your-name/your-email/your-subject/your-message` a
+`nombre/telefono/correo/ciudad/servicio/mensaje` y reescribí la plantilla del correo. Respuesta:
+
+```
+"aviso": "Las plantillas de correo usan [your-subject], [your-message], [your-email], y no hay
+          ningún campo con ese nombre en el formulario. CF7 enviará el correo con la etiqueta
+          literal dentro en vez del valor, y eso no da ningún error: simplemente llegan los
+          avisos con corchetes. Corrige el correo o añade el campo."
+```
+
+Me faltaba el segundo correo (el acuse de recibo), que seguía apuntando a los campos viejos.
+Lo corregí y el aviso desapareció.
+
+**Esto es lo mejor que he visto en todo el servidor**, y es exactamente el problema que este
+registro lleva documentando desde la fase 3: *el dato queda guardado y el efecto sale mal, sin
+que nada falle*. Aquí, por una vez, **la herramienta lo comprueba y te lo dice**. Es la misma
+clase de verificación que le falta a `elementor_template_apply` (¿la página está marcada como
+Elementor?), a `elementor_template_conditions` (¿la caché se regeneró de verdad?) y a
+`seo_update` (¿Rank Math está configurado?). Alguien pensó bien este trozo. Lo que pido en el
+resto del documento ya existe aquí: **que la herramienta valide su propio efecto, no sólo su
+escritura.**
+
+### ✅ La lección de `elementor_widget_schema`, aplicada
+
+En la fase 6 anoté que había adivinado `sg_content_link` por analogía porque nada me mandaba a
+consultar el esquema. Esta vez, antes de tocar el widget `elementskit-contact-form7`, lo pedí:
+
+```
+elementor_widget_schema(widget:"elementskit-contact-form7", buscar:"form")
+-> 506 controles. El selector de formulario es `ekit_contact_form7`, opciones: [11]
+```
+
+Acerté a la primera con las 9 claves de estilo y el selector, sin una sola prueba fallida. Y su
+descripción dice la frase que hacía falta: *"Elementor ignora en silencio las claves que no
+conoce, así que un ajuste mal nombrado se guarda y no hace nada"*.
+
+**El problema no es la herramienta, es que no está enlazada desde donde se necesita.** Ninguna
+descripción de `elementor_element_update` ni de `elementor_element_add` la menciona, y son
+justo las dos desde las que uno llega necesitándola. Una línea —"si no conoces las claves de un
+widget, pídelas antes con `elementor_widget_schema`"— convierte una herramienta que existe y
+nadie encuentra en la que evita el problema.
+
+**Pega menor:** la respuesta completa del esquema son 54.630 caracteres y **no cabe en una
+respuesta**; el harness la volcó a un fichero y tuve que consultarla con `jq`. El parámetro
+`buscar` existe precisamente para eso, pero con `buscar:"form"` seguían saliendo 322 de 506
+controles, porque en este widget *todas* las claves llevan `form` en el nombre
+(`ekit_contact_form_...`). Un `limite` o un `solo_claves:true` lo resolvería.
