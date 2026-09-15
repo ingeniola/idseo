@@ -1372,3 +1372,147 @@ no lo que la foto es. Con fotos reales hay que revisarlos.
 existe. En esta instalación de pruebas todo lo que se envíe va a rebotar. Es lo correcto
 para el encargo y lo incorrecto para probar: si se quiere ver un envío completo, hay que
 cambiar el destinatario de los cuatro formularios de Contact Form 7.
+
+---
+
+# Cierre: las cuatro preguntas del encargo
+
+## 1. Las tres cosas que más bloquearon, en orden
+
+### Primera: escribir el dato y omitir lo que hace que el dato sirva
+
+Es el hallazgo del proyecto y no es una anécdota: lo vi **cinco veces** en cinco
+herramientas distintas, siempre con la misma forma.
+
+| Herramienta | Escribió bien | No hizo | Contestó |
+|---|---|---|---|
+| `elementor_template_apply` | `_elementor_data` (435 KB) | marcar la página como Elementor | `{"accion":"contenido sustituido","elementos":372}` |
+| `elementor_template_conditions` | `_elementor_conditions` | regenerar la caché de ubicaciones | `{"regenerada":true}` |
+| `seo_update` | `rank_math_title` y `description` en 24 páginas | nada (Rank Math sin asistente completado) | éxito, y el sitio no emitía una sola etiqueta |
+| `cf7_update` | la plantilla del formulario | invalidar la caché de objetos | éxito, y el pie mostró el shortcode crudo en 32 páginas |
+| `elementor_template_apply` (entrada) | la plantilla entera | avisar de que no tiene ni una etiqueta dinámica | `{"accion":"contenido sustituido"}` |
+
+Las cinco veces el resultado fue el mismo: una página que existe, que responde 200 y que
+está rota. Y las cinco veces lo descubrí **mirando el HTML del front**, nunca por la
+respuesta de la herramienta.
+
+Lo que cuesta esto no son las llamadas de la reparación, que son pocas. Lo que cuesta es que
+destruye la confianza en el acuse de recibo. A partir de la fase 3 dejé de creerme cualquier
+«éxito» y empecé a verificar cada escritura contra el HTML publicado. Eso multiplicó por dos
+las llamadas de todo el proyecto.
+
+El caso de `cf7_update` es el más instructivo porque es el único que **sí** valida su propio
+efecto: detecta etiquetas de correo que apuntan a campos inexistentes y lo dice. O sea, el
+plugin sabe hacer esto. Simplemente no lo hace en el resto de sitios donde hace falta.
+
+### Segunda: `elementor_element_update` devuelve treinta veces lo que se le manda
+
+Medido: cambiar tres textos de un widget `elementskit` gasta unas 1,200 palabras de
+respuesta. Las 13 páginas de servicio necesitaban 247 escrituras de elemento. Sólo los
+acuses de recibo habrían sido del orden de 150,000 tokens.
+
+Con ese coste, usar las herramientas para el trabajo real era imposible. Construí un
+aplicador por rutas en PHP que pasa por el `save()` oficial de Elementor y contesta un
+número. A partir de ahí, **el 90% del contenido de este sitio se escribió sin usar ninguna
+herramienta del servidor MCP.**
+
+Esto no es un fallo técnico: la herramienta hace lo que promete. Es un fallo de economía que
+convierte el resto del catálogo en decorado. Y arrastra un efecto de segundo orden que
+anoté en la fase 11: al direccionar por ruta, insertar un elemento desplaza a todos sus
+hermanos, y el aplicador contesta `aplicados=0` sin que eso sea un error.
+
+### Tercera: no poder ver
+
+Ni capturas de pantalla ni forma barata de mirar una imagen. Lo de las capturas es del
+entorno, no del plugin: el proxy contesta 403 a un CONNECT hacia `mcp1.webs27.online:443`.
+Lo anoto porque cambia cómo se trabaja, no para culpar a nadie.
+
+Lo del plugin sí: para decidir cuál de los cuatro logos iba en la cabecera y cuál en el pie
+tuve que **muestrear píxeles con GD** —porcentaje de transparencia, de negro, de blanco,
+distribución de tinta por tercios verticales— y deducir que el fichero con un 60% más de
+negro en el tercio inferior era la versión apilada con el texto debajo. Funcionó, y es una
+manera absurda de mirar una imagen. Después comprobé que sí se pueden visualizar por
+base64, pero sólo miniaturas: una imagen a tamaño completo son unos 350,000 tokens.
+
+## 2. Qué herramienta eché de menos más veces
+
+**`elementor_text_audit(post_ids, buscar?)`**: recorrer los documentos y devolver sólo los
+ajustes de texto visible, con su ruta y su widget. Nada más.
+
+La escribí a mano cuatro veces en PHP, con variaciones, porque cada vez necesitaba filtrar
+distinto. Y su ausencia es la causa directa de los dos fallos más graves del proyecto:
+
+- El **pie en inglés durante 32 páginas**, que encontré de rebote persiguiendo otra cosa,
+  porque mi verificación cortaba el HTML justo antes del pie y lo excluía por construcción.
+- La **plantilla de entrada con el artículo de demostración escrito a fuego**, que no salía
+  en ningún barrido de HTML porque no había entradas que la pintaran.
+
+Las dos son la misma pregunta sin responder: *¿qué texto hay en este sitio, exactamente?*
+Con 161 herramientas y ocho dedicadas a leer la estructura de Elementor, que no exista la
+que lee el texto es lo más raro del catálogo.
+
+Segunda más echada de menos: **`elementor_element_replace`**, cambiar el tipo de un widget
+conservando su posición y su `id`. En un sitio hecho con un kit comprado, «la sección está
+bien puesta pero el widget no es el que necesito» pasa cada media hora.
+
+## 3. Qué descripción reescribiría y cómo
+
+La de **`elementor_template_apply`**, sin dudarlo. Es la herramienta con la que empieza
+cualquier sitio hecho con kit, y su descripción omite las tres cosas que hay que saber.
+
+Lo que falta en la descripción actual:
+
+1. **El orden obligatorio.** `content_create` → `elementor_enable` → `elementor_template_apply`.
+   Si se aplica antes de habilitar, se escriben cientos de kilobytes de `_elementor_data` en
+   una página que `is_built_with_elementor()` sigue considerando no-Elementor, y el
+   visitante recibe HTML desnudo. No está escrito en ninguna parte.
+2. **Que se bloquea a sí misma.** Al aplicar se escribe también `post_content`, y la llamada
+   a `elementor_enable` que viene después falla con `[security_gate] Esa página ya tiene
+   contenido del editor de bloques`, refiriéndose a contenido que puso la propia
+   herramienta dos llamadas antes. Hay que pasarle `force:true`. La descripción de
+   `elementor_enable` debería nombrar este caso concreto.
+3. **Que copia el contenido de demostración literal.** Al aplicar una plantilla de entrada
+   individual, el título y el cuerpo del artículo de ejemplo del kit se quedan como texto
+   fijo. La plantilla resultante no tiene ninguna etiqueta dinámica y todas las entradas
+   saldrían iguales.
+
+Propuesta de texto:
+
+> Sustituye el contenido de una página por el de una plantilla de la biblioteca.
+> **La página debe estar habilitada para Elementor antes** (`elementor_enable`): si no, se
+> guardan los datos pero el visitante recibe la página sin maquetar. Al aplicar se escribe
+> también `post_content`, así que si necesitas habilitar después tendrás que usar
+> `force:true`.
+> En plantillas del generador de temas (`single-post`, `archive`), el contenido de
+> demostración se copia tal cual: revisa después si la plantilla necesita etiquetas
+> dinámicas, porque esta herramienta no las añade.
+
+Mención aparte para **`option_update`**, por lo contrario: su descripción avisa de que la
+identidad del sitio está bloqueada «sin excepción», y me dejó cambiar `blogname` y
+`blogdescription` sin la menor resistencia. Una descripción que promete una puerta que no
+existe es peor que no prometer nada, porque te hace confiar en que algo te va a parar.
+
+## 4. Qué hice con PHP que debería tener herramienta propia
+
+Todo esto se resolvió con `ingenio_execute_php` porque no había otra vía. Ordenado por lo
+que más me parece que falta:
+
+| Lo que hice en PHP | Herramienta que falta |
+|---|---|
+| Aplicador de textos por ruta (el 90% del contenido del sitio) | `elementor_element_update` con varias rutas y ajustes en una llamada, que conteste un número |
+| Leer todo el texto de un documento con su ruta | `elementor_text_audit` |
+| Regenerar la caché de ubicaciones del generador de temas | que `elementor_template_conditions` lo haga de verdad, como promete |
+| `wp_cache_flush()` después de casi cada escritura | que las herramientas de escritura invaliden su propia caché |
+| Completar el asistente de Rank Math (`rank_math_wizard_completed`) | `seo_settings_update` debería poder dejar el plugin operativo, o al menos avisar de que no lo está |
+| Cambiar un acordeón por un editor de texto (4 páginas legales) | `elementor_element_replace` |
+| Rehacer la sección del cuerpo de la plantilla de entrada con widgets dinámicos | lo mismo |
+| Crear las 6 categorías del blog | crear términos; existe `content_set_terms` para asignarlos pero no para crearlos |
+| Poner el texto alternativo a 32 imágenes | `media_update` en lote |
+| Asignar imagen distinta a 19 páginas y rotar los carruseles | lo mismo, en lote |
+| `wp_update_post` para poner `post_parent` en las 13 páginas hijas | `content_update` no tiene parámetro `parent`; `wp_cli("post update --post_parent")` contesta `[not_supported]` |
+| Identificar cuatro logos muestreando píxeles con GD | poder ver una imagen sin pagar 350,000 tokens |
+| Comprobar que el logo blanco del pie iba sobre fondo negro, leyendo el CSS generado | `elementor_element_get` que devuelva el color efectivo resuelto, no la referencia `globals/colors?id=` |
+
+De la lista, los dos que cambiarían más el trabajo diario son el primero y el segundo. Con
+una escritura en lote barata y una lectura de texto, este sitio se habría hecho con las
+herramientas del servidor en lugar de con PHP, que es justamente lo que veníamos a medir.
