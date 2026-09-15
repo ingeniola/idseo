@@ -1069,3 +1069,64 @@ formulario, y eso lo hice por casualidad.
 o que las escrituras lo hagan solas. El servidor ya llama a
 `\Elementor\Plugin::$instance->files_manager->clear_cache()` en algunos sitios; le falta hacer
 lo propio con la caché de objetos de WordPress.
+
+## Fase 10 — Las 13 fichas de servicio
+
+Escritas y verificadas las trece: H1 propio, intro, secciones técnicas del documento, FAQ de
+4–5 preguntas y CTA. Entre 418 y 586 palabras cada una, cero inglés, cero enlaces vacíos.
+
+### 🔴 D — El coste de contexto obligó a escribir por PHP, como estaba previsto
+
+En la fase 6 medí que `elementor_element_update` devuelve unas 30 veces lo que se le manda y
+calculé ~1.500 escrituras para el sitio entero. Aquí tocó pagar esa factura: **13 páginas × 19
+elementos = 247 escrituras.** Por la herramienta serían unas 250 respuestas de ~450 palabras:
+del orden de **150.000 tokens sólo en acuses de recibo**, y el trabajo no cabe.
+
+**Qué hice:** un aplicador en PHP que escribe por **ruta** —`0.0.0`, `1.1.4`, `1.0.2.2`— en vez
+de por `element_id`, y guarda con `$doc->save(['elements' => $data])`, que es el pipeline
+oficial de Elementor: crea revisión y regenera el CSS. Tres llamadas para las trece páginas.
+
+La ruta, además, resultó ser **mejor identificador que el id** para este trabajo: las 13 fichas
+son clones de la misma plantilla, así que los `element_id` son distintos en cada una pero la
+ruta es idéntica. Un mismo mapa sirvió para las trece.
+
+**Mi lectura:** esto no es un apaño por comodidad, es la consecuencia directa del problema
+medido. Y sugiere dos cosas concretas para el servidor:
+
+1. **`devolver: "minimo"` en `elementor_element_update`.** Ya lo pedí en la fase 6; aquí es
+   donde se ve que sin eso no se puede maquetar un sitio entero.
+2. **Direccionar por ruta, no sólo por id.** `elementor_find` ya devuelve el campo `ruta` de
+   cada elemento, así que el servidor ya piensa en rutas — pero luego `elementor_element_update`
+   sólo acepta `element_id`. Poder escribir por ruta convierte "aplicar el mismo contenido a 13
+   clones de una plantilla" en un `batch` trivial.
+
+### 🔍 Mi propio punto ciego: el pie llevaba 32 páginas en inglés
+
+Esto no es fricción del servidor, es un error mío, y lo anoto porque el encargo pide decir
+cuándo algo deja el sitio raro.
+
+Mis verificaciones cortaban el HTML entre `data-elementor-type="wp-page"` y
+`data-elementor-type="footer"` para revisar sólo el contenido de la página. Con eso vengo
+diciendo "cero inglés" desde la fase 6. **El pie quedaba fuera del recorte por construcción**, y
+llevaba desde el principio con:
+
+```
+Quick Links · Our Services · Contact Info · Subscribe To Our Weekly Newsletter
+Garden Maintenance · Landscape Design · Lawn Care & Mowing
++1 (202) 555-0143 · info@yourdomain.com · Kazipur 6710, Sirajganj, BD
+Copyright © 2026 Plantix By Roxtheme
+```
+
+Una dirección de Bangladesh y un teléfono de Washington en el pie de las 32 páginas del sitio.
+Lo encontré de rebote, persiguiendo un "Landscape Design" que salía en una ficha de servicio y
+que resultó venir del pie, no de la ficha.
+
+**La lección, que sí va contra el servidor:** cuando lo que se comprueba es una plantilla del
+theme builder, **no hay forma de preguntarle al servidor "¿dónde sale esto?"**. La cabecera y
+el pie se dibujan en todas las páginas y no aparecen en ningún listado de contenido: no salen
+en `content_search`, y `elementor_templates` los lista pero sin decir que su contenido está en
+inglés. Una auditoría de "texto del sitio por plantilla, no por página" habría cazado esto en
+la primera hora.
+
+Corregido: pie y cabecera enteros en español, con los cinco datos de contacto reales, los
+enlaces a las páginas que existen y el botón «Cotizar gratis» apuntando a `/cotizacion/`.
